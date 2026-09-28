@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cruz Music Studio — Attendance & Lesson Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-icon">♫</div>
+      <div>
+        <div class="brand-title">Cruz Music Studio</div>
+        <div class="brand-subtitle">Student Attendance Tracker</div>
+      </div>
+    </div>
+    <div class="header-actions" id="header-user-block" style="display: none;">
+      <div class="user-badge" id="current-user-tag">Family Portal</div>
+      <button class="btn-secondary-sm" id="btn-logout">Exit / Switch PIN</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- ==========================================
+         VIEW 1: 4-DIGIT PIN LOGIN SCREEN
+         ========================================== -->
+    <section id="view-login" class="login-card">
+      <div class="login-icon-badge">🎹</div>
+      <h2 class="login-title">Studio Portal Login</h2>
+      <p class="login-desc">Enter your 4-digit studio PIN to access your lesson attendance or teacher roster.</p>
+
+      <!-- 4 PIN Dots -->
+      <div class="pin-display-wrapper">
+        <div class="pin-dot" id="dot-0"></div>
+        <div class="pin-dot" id="dot-1"></div>
+        <div class="pin-dot" id="dot-2"></div>
+        <div class="pin-dot" id="dot-3"></div>
+      </div>
+
+      <!-- Touch Keypad -->
+      <div class="pin-keypad">
+        <button class="key-btn" data-key="1">1</button>
+        <button class="key-btn" data-key="2">2</button>
+        <button class="key-btn" data-key="3">3</button>
+        <button class="key-btn" data-key="4">4</button>
+        <button class="key-btn" data-key="5">5</button>
+        <button class="key-btn" data-key="6">6</button>
+        <button class="key-btn" data-key="7">7</button>
+        <button class="key-btn" data-key="8">8</button>
+        <button class="key-btn" data-key="9">9</button>
+        <button class="key-btn action-key" data-key="clear">Clear</button>
+        <button class="key-btn" data-key="0">0</button>
+        <button class="key-btn action-key" data-key="backspace">⌫</button>
+      </div>
+
+      <div class="pin-feedback" id="pin-feedback"></div>
+
+      <!-- Quick Demo PIN Switchers for Testing -->
+      <div class="demo-pills">
+        <span>Instant Preview (Click to test):</span>
+        <div class="demo-btn-group">
+          <button class="demo-chip" onclick="app.quickFillPin('4421')">👨‍👩‍👧 Family PIN (2 Siblings)</button>
+          <button class="demo-chip" onclick="app.quickFillPin('1102')">🎵 Instructor PIN (Sarah Jenkins)</button>
+          <button class="demo-chip" onclick="app.quickFillPin('9900')">⚙️ Studio Admin PIN</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 2: FAMILY / PARENT PORTAL
+         ========================================== -->
+    <section id="view-family" style="display: none;">
+      <div class="portal-header">
+        <div class="portal-title-block">
+          <h1 id="family-welcome-name">Welcome, Miller Family</h1>
+          <p id="family-contact-sub">Primary Contact: (555) 831-2910 • maria.miller@email.com</p>
+        </div>
+        <div class="user-badge" style="background:#1E293B; border-color:#334155;">
+          <span>Family PIN:</span> <strong id="family-pin-display">4421</strong>
+        </div>
+      </div>
+
+      <!-- Child Tabs (If Family has multiple children) -->
+      <div class="family-tabs" id="family-student-tabs">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Active Child Card Banner -->
+      <div class="student-hero-banner" id="student-hero-banner">
+        <div class="hero-meta">
+          <h2 id="active-student-name">Leo Miller</h2>
+          <div class="hero-details">
+            <div>Instrument: <strong id="active-student-instrument">Piano</strong></div>
+            <div>Instructor: <strong id="active-student-teacher">Sarah Jenkins</strong></div>
+            <div>Lesson Schedule: <strong id="active-student-schedule">Tuesday at 4:00 PM</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary Stats -->
+      <div class="stat-grid">
+        <div class="stat-card" style="border-top: 4px solid var(--status-attended);">
+          <div class="stat-num" id="stat-attended" style="color: var(--status-attended);">0</div>
+          <div class="stat-label">Attended</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--status-late);">
+          <div class="stat-num" id="stat-late" style="color: var(--status-late);">0</div>
+          <div class="stat-label">Late</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--status-missed);">
+          <div class="stat-num" id="stat-missed" style="color: var(--status-missed);">0</div>
+          <div class="stat-label">Missed</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--status-rescheduled);">
+          <div class="stat-num" id="stat-rescheduled" style="color: var(--status-rescheduled);">0</div>
+          <div class="stat-label">Rescheduled</div>
+        </div>
+      </div>
+
+      <!-- Attendance History -->
+      <div class="timeline-card">
+        <div class="table-header">
+          <span>Lesson Attendance Log & Practice Notes</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="attendance-table">
+            <thead>
+              <tr>
+                <th>Lesson #</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Instructor</th>
+                <th>Practice Notes & Teacher Homework</th>
+              </tr>
+            </thead>
+            <tbody id="family-attendance-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 3: TEACHER PORTAL
+         ========================================== -->
+    <section id="view-teacher" style="display: none;">
+      <div class="portal-header">
+        <div class="portal-title-block">
+          <h1 id="teacher-portal-name">Instructor: Sarah Jenkins</h1>
+          <p id="teacher-portal-instruments">Piano, Voice • Today's Student Roster</p>
+        </div>
+        <div class="teacher-controls">
+          <div class="date-picker-wrap">
+            <label for="teacher-date-input">Lesson Date:</label>
+            <input type="date" id="teacher-date-input">
+          </div>
+          <button class="btn-primary" id="btn-save-all-teacher">💾 Save All Changes</button>
+        </div>
+      </div>
+
+      <div class="action-bar" style="margin-bottom: 20px;">
+        <span style="font-weight: 700; color: var(--primary-navy);" id="roster-count-label">Assigned Students (0)</span>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">
+          Tap status button to record attendance. Auto-saves on change.
+        </div>
+      </div>
+
+      <!-- List of Student Cards -->
+      <div id="teacher-roster-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 4: STUDIO ADMIN DASHBOARD
+         ========================================== -->
+    <section id="view-admin" style="display: none;">
+      <div class="portal-header">
+        <div class="portal-title-block">
+          <h1>Studio Administration</h1>
+          <p>Cruz Music Studio • Master Roster & Attendance Control</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-gold" id="btn-modal-add-student">+ New Family / Student</button>
+          <button class="btn-primary" id="btn-modal-add-teacher">+ New Instructor</button>
+        </div>
+      </div>
+
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="admin-tab-students">Families & Students</button>
+        <button class="admin-tab" data-tab="admin-tab-teachers">Instructors (10)</button>
+        <button class="admin-tab" data-tab="admin-tab-attendance">Recent Attendance Log</button>
+        <button class="admin-tab" data-tab="admin-tab-settings">Google Sheet Connection</button>
+      </div>
+
+      <!-- Tab A: Students -->
+      <div id="admin-tab-students" class="admin-tab-content">
+        <div class="timeline-card">
+          <div class="table-header">
+            <span>Enrolled Students & Assigned Family PINs</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Instrument</th>
+                  <th>Instructor</th>
+                  <th>Day & Time</th>
+                  <th>Parent / Family</th>
+                  <th>Family 4-Digit PIN</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="admin-students-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab B: Teachers -->
+      <div id="admin-tab-teachers" class="admin-tab-content" style="display: none;">
+        <div class="timeline-card">
+          <div class="table-header">
+            <span>Studio Instructors Roster</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Teacher ID</th>
+                  <th>Name</th>
+                  <th>4-Digit PIN</th>
+                  <th>Instruments</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Active</th>
+                </tr>
+              </thead>
+              <tbody id="admin-teachers-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab C: Recent Attendance -->
+      <div id="admin-tab-attendance" class="admin-tab-content" style="display: none;">
+        <div class="timeline-card">
+          <div class="table-header">
+            <span>Studio-Wide Lesson Attendance Records</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Student</th>
+                  <th>Instructor</th>
+                  <th>Status</th>
+                  <th>Lesson #</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="admin-attendance-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab D: Google Sheet Settings -->
+      <div id="admin-tab-settings" class="admin-tab-content" style="display: none;">
+        <div class="student-card" style="max-width: 650px;">
+          <h3 style="margin-bottom: 12px; color: var(--primary-navy);">Google Apps Script Web App Connection</h3>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+            Paste your deployed Google Apps Script Web App URL below to sync directly with your live Google Sheet.
+          </p>
+          <div class="form-group">
+            <label for="gas-endpoint-url">Google Apps Script Web App URL:</label>
+            <input type="url" id="gas-endpoint-url" placeholder="https://script.google.com/macros/s/.../exec">
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; margin-top: 16px;">
+            <button class="btn-primary" id="btn-save-gas-url">Save & Test Connection</button>
+            <button class="btn-secondary-sm" style="color: var(--primary-navy); border-color: var(--border-color);" id="btn-reset-demo-mode">Reset to Demo Data</button>
+          </div>
+          <div id="gas-connection-status" style="margin-top: 14px; font-size: 0.88rem; font-weight: 600;"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: ADD NEW FAMILY / STUDENT
+       ========================================== -->
+  <div class="modal-overlay" id="modal-add-student">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Add New Family / Student</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <form id="form-add-student">
+        <div class="form-group">
+          <label>Student Full Name *</label>
+          <input type="text" id="new-stu-name" required placeholder="e.g. Liam Miller">
+        </div>
+        <div class="form-group">
+          <label>Parent / Guardian Name *</label>
+          <input type="text" id="new-parent-name" required placeholder="e.g. Maria Miller">
+        </div>
+        <div class="form-group">
+          <label>Parent Phone & Email</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <input type="tel" id="new-parent-phone" placeholder="(555) 000-0000">
+            <input type="email" id="new-parent-email" placeholder="parent@email.com">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Instrument *</label>
+          <input type="text" id="new-stu-instrument" required placeholder="e.g. Piano, Guitar, Drums, Voice">
+        </div>
+        <div class="form-group">
+          <label>Assigned Instructor *</label>
+          <select id="new-stu-teacher" required></select>
+        </div>
+        <div class="form-group">
+          <label>Lesson Schedule (Day & Time)</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <select id="new-stu-day">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+            </select>
+            <input type="text" id="new-stu-time" placeholder="e.g. 4:30 PM">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Family 4-Digit PIN *</label>
+          <div class="pin-field-wrap">
+            <input type="text" id="new-family-pin" maxlength="4" placeholder="e.g. 5241" required pattern="\d{4}">
+            <button type="button" class="btn-generate-pin" id="btn-gen-family-pin">🎲 Auto-Gen PIN</button>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">
+            Enter an existing family PIN to link siblings together, or click Auto-Gen for a unique new PIN.
+          </span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary-sm" style="color: var(--text-muted); border-color: var(--border-color);" onclick="app.closeModals()">Cancel</button>
+          <button type="submit" class="btn-gold">Create Student Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: ADD NEW INSTRUCTOR
+       ========================================== -->
+  <div class="modal-overlay" id="modal-add-teacher">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Add New Instructor</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <form id="form-add-teacher">
+        <div class="form-group">
+          <label>Instructor Full Name *</label>
+          <input type="text" id="new-teacher-name" required placeholder="e.g. Robert Smith">
+        </div>
+        <div class="form-group">
+          <label>Instruments Taught *</label>
+          <input type="text" id="new-teacher-instruments" required placeholder="e.g. Piano, Cello">
+        </div>
+        <div class="form-group">
+          <label>Email & Phone</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <input type="email" id="new-teacher-email" placeholder="teacher@cruzmusicstudio.com">
+            <input type="tel" id="new-teacher-phone" placeholder="(555) 000-0000">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Teacher 4-Digit PIN *</label>
+          <div class="pin-field-wrap">
+            <input type="text" id="new-teacher-pin" maxlength="4" placeholder="e.g. 1111" required pattern="\d{4}">
+            <button type="button" class="btn-generate-pin" id="btn-gen-teacher-pin">🎲 Auto-Gen PIN</button>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary-sm" style="color: var(--text-muted); border-color: var(--border-color);" onclick="app.closeModals()">Cancel</button>
+          <button type="submit" class="btn-primary">Add Instructor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast-notification">
+    <span id="toast-message">Attendance saved successfully!</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="mockData.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
