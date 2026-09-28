@@ -26,7 +26,7 @@ This method embeds the portal seamlessly into a dedicated page on your existing 
 ```html
 <div style="position: relative; width: 100%; min-height: 850px; overflow: hidden; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
   <iframe 
-    src="https://YOUR-PORTAL-URL.pages.dev" 
+    src="https://iamdustins.github.io/Cruz-Music-Studio-Student-Tracker/frontend/index.html" 
     style="width: 100%; height: 900px; border: none; display: block;" 
     allow="clipboard-write"
     loading="lazy"
