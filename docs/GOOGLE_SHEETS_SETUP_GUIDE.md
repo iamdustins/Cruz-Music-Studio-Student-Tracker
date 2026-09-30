@@ -63,3 +63,22 @@ This guide shows you how to set up your Google Sheet database in **under 3 minut
 3. Go to the **Google Sheet Connection** tab.
 4. Paste your Web app URL into the input field and click **Save & Test Connection**.
 5. You'll see a green checkmark: *"Connected to Google Apps Script successfully!"*.
+
+---
+
+### Step 6: Link Your Annual Registration Google Form (60 Seconds)
+To have student registrations automatically populate your tracker without any typing:
+
+1. Open your annual sign-up form in [Google Forms](https://forms.google.com).
+2. Click the **Responses** tab at the top.
+3. Click the green Sheets icon (or click the 3 vertical dots `⋮` and select **Select destination for responses**).
+4. Select **"Select existing spreadsheet"** and pick your **`Cruz Music Studio - Student Attendance Tracker`** spreadsheet.
+5. Google Forms will immediately link and add a tab named **`Form Responses 1`**.
+6. **Automatic Sibling & PIN Magic**:
+   * The script reads parent email and student name.
+   * If a parent has multiple children (or registers siblings on the same form), the script automatically links them under the **same 4-digit family PIN**!
+   * Brand new families are automatically assigned a **unique 4-digit PIN**!
+7. **Two ways to sync**:
+   * **Manual Sync**: Click **"🔄 Sync Google Form Registrations"** in the Studio Admin portal anytime.
+   * **Instant Automatic Sync**: In Google Apps Script, click **Triggers (alarm clock icon)** on the left → **Add Trigger** → Choose function: `onFormSubmit` → Event type: **On form submit** → Save. Every new submission will now instantly appear in your tracker in real time!
+

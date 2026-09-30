@@ -212,8 +212,19 @@
       <!-- Tab A: Students -->
       <div id="admin-tab-students" class="admin-tab-content">
         <div class="timeline-card">
-          <div class="table-header">
-            <span>Enrolled Students & Assigned Family PINs</span>
+          <div class="table-header" style="flex-wrap: wrap; gap: 10px;">
+            <div>
+              <span>Enrolled Students & Assigned Family PINs</span>
+              <span id="synced-form-badge" style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 8px;"></span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <button class="btn-primary" id="btn-sync-google-forms" style="background:#059669; font-size:0.82rem; padding:7px 14px;">
+                🔄 Sync Google Form Registrations
+              </button>
+              <button class="demo-chip" type="button" onclick="app.openFormGuideModal()">
+                💡 Google Form Linking Guide
+              </button>
+            </div>
           </div>
           <div style="overflow-x: auto;">
             <table class="attendance-table">
@@ -577,6 +588,60 @@
           <button type="submit" class="btn-primary">Add Instructor</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: GOOGLE FORM LINKING GUIDE
+       ========================================== -->
+  <div class="modal-overlay" id="modal-form-guide">
+    <div class="modal-box" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3>📋 Linking Your Google Form Registration</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <div style="font-size:0.9rem; color:var(--text-main); line-height:1.5;">
+        <p style="margin-bottom:14px;">
+          You can link your annual student registration Google Form so that <strong>parents are automatically registered</strong>, siblings share the same 4-digit PIN, and unique PINs are generated without any manual data entry.
+        </p>
+
+        <div style="background:#F8FAFC; border:1px solid var(--border-color); border-radius:10px; padding:14px; margin-bottom:14px;">
+          <h4 style="color:var(--primary-navy); margin-bottom:6px;">Step 1: Link Form to This Spreadsheet</h4>
+          <ol style="margin-left:20px; font-size:0.85rem; color:var(--text-muted); display:flex; flex-direction:column; gap:4px;">
+            <li>Open your annual registration form in Google Forms.</li>
+            <li>Click the <strong>Responses</strong> tab at the top.</li>
+            <li>Click the green Sheets icon (or three dots → <em>Select destination for responses</em>).</li>
+            <li>Choose <strong>"Select existing spreadsheet"</strong> and pick your <em>Cruz Music Studio Attendance Tracker</em> sheet.</li>
+          </ol>
+        </div>
+
+        <div style="background:#F8FAFC; border:1px solid var(--border-color); border-radius:10px; padding:14px; margin-bottom:14px;">
+          <h4 style="color:var(--primary-navy); margin-bottom:6px;">Step 2: Smart Auto-Mapping</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted);">
+            Google Forms will automatically create a tab named <strong>`Form Responses 1`</strong>. The system recognizes:
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+            <span class="instrument-tag">Parent Name</span>
+            <span class="instrument-tag">Parent Email</span>
+            <span class="instrument-tag">Parent Phone</span>
+            <span class="instrument-tag">Student Name</span>
+            <span class="instrument-tag">Instrument</span>
+            <span class="instrument-tag">Day & Time</span>
+            <span class="instrument-tag">Sibling Name</span>
+          </div>
+        </div>
+
+        <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:10px; padding:14px; margin-bottom:18px;">
+          <h4 style="color:#065F46; margin-bottom:4px;">✓ Automatic Sibling PIN Matching</h4>
+          <p style="font-size:0.85rem; color:#047857;">
+            When a parent signs up multiple children (or registers again next year with the same email), the system automatically links their children together under their existing <strong>family 4-digit PIN</strong>!
+          </p>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn-primary" onclick="app.closeModals()">Got it!</button>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -132,6 +132,11 @@
     ackMessageInput: document.getElementById('ack-message-input'),
 
     // Toast
+    // Google Form Sync
+    btnSyncGoogleForms: document.getElementById('btn-sync-google-forms'),
+    syncedFormBadge: document.getElementById('synced-form-badge'),
+    modalFormGuide: document.getElementById('modal-form-guide'),
+
     toast: document.getElementById('toast-notification'),
     toastMsg: document.getElementById('toast-message')
   };
@@ -145,6 +150,10 @@
     bindAdminTabs();
     bindModalEvents();
     bindTravelAlertEvents();
+
+    if (dom.btnSyncGoogleForms) {
+      dom.btnSyncGoogleForms.addEventListener('click', handleSyncGoogleForms);
+    }
 
     if (state.gasUrl && dom.gasEndpointUrl) {
       dom.gasEndpointUrl.value = state.gasUrl;
@@ -1503,6 +1512,114 @@
     if (dom.modalTravelAlert) dom.modalTravelAlert.classList.remove('open');
     if (dom.modalParentConfirm) dom.modalParentConfirm.classList.remove('open');
     if (dom.modalAckAlert) dom.modalAckAlert.classList.remove('open');
+    if (dom.modalFormGuide) dom.modalFormGuide.classList.remove('open');
+  }
+
+  function openFormGuideModal() {
+    if (dom.modalFormGuide) dom.modalFormGuide.classList.add('open');
+  }
+
+  async function handleSyncGoogleForms() {
+    showToast('Syncing with Google Form responses...');
+
+    try {
+      if (state.gasUrl) {
+        // Live sync with Google Sheet Form Responses tab
+        const res = await fetch(`${state.gasUrl}?action=syncFormResponses`);
+        const data = await res.json();
+        if (data.success) {
+          if (dom.syncedFormBadge) {
+            dom.syncedFormBadge.textContent = `✓ Synced: ${data.syncedStudentsCount} new student(s)`;
+          }
+          showToast(data.message || `Synced ${data.syncedStudentsCount} student(s) from Google Form!`);
+          renderAdminStudentsTable();
+        } else {
+          throw new Error(data.error || 'Sync error');
+        }
+        return;
+      }
+
+      // Demo Mode Sync: Process pending form responses
+      const db = getLocalDb();
+      const pending = window.CMS_MOCK_DATA.pendingFormSubmissions || [];
+
+      if (!db.families) db.families = [];
+
+      let importedCount = 0;
+      let newPinGenerated = '';
+      let siblingPinReused = '';
+
+      pending.forEach(item => {
+        // Check if student already in DB
+        let alreadyAdded = false;
+        db.families.forEach(f => {
+          if ((f.students || []).some(s => s.studentName.toLowerCase() === item.studentName.toLowerCase())) {
+            alreadyAdded = true;
+          }
+        });
+
+        if (alreadyAdded) return;
+
+        if (item.isNewFamily) {
+          // New family: auto-generate unique 4-digit PIN
+          const newPin = generateUniquePinLocal();
+          newPinGenerated = newPin;
+          const familyId = 'FAM-' + (100 + db.families.length + 1);
+          const studentId = 'STU-' + Math.floor(200 + Math.random() * 800);
+
+          db.families.push({
+            familyId: familyId,
+            parentName: item.parentName,
+            pin: newPin,
+            parentPhone: item.parentPhone,
+            parentEmail: item.parentEmail,
+            students: [{
+              studentId: studentId,
+              studentName: item.studentName,
+              instrument: item.instrument,
+              teacherId: item.teacherId || 'T101',
+              day: 'Monday',
+              time: '4:00 PM',
+              status: 'Active'
+            }]
+          });
+          importedCount++;
+        } else {
+          // Sibling joining existing family: reuse existing family PIN!
+          const existingFam = db.families.find(f => f.parentEmail === item.parentEmail) || db.families[0];
+          siblingPinReused = existingFam.pin;
+          const studentId = 'STU-' + Math.floor(200 + Math.random() * 800);
+
+          existingFam.students.push({
+            studentId: studentId,
+            studentName: item.studentName,
+            instrument: item.instrument,
+            teacherId: item.teacherId || 'T103',
+            day: 'Tuesday',
+            time: '5:30 PM',
+            status: 'Active'
+          });
+          importedCount++;
+        }
+      });
+
+      saveLocalDb(db);
+      renderAdminStudentsTable();
+
+      if (dom.syncedFormBadge) {
+        dom.syncedFormBadge.textContent = `✓ Synced: ${importedCount} new student(s)`;
+        dom.syncedFormBadge.style.color = '#059669';
+      }
+
+      if (importedCount > 0) {
+        showToast(`🎉 Synced ${importedCount} new students! Generated PIN ${newPinGenerated} for Johnson family; linked Julian to Miller PIN ${siblingPinReused}!`, 5000);
+      } else {
+        showToast('All Google Form submissions are already up-to-date and synced!');
+      }
+
+    } catch (err) {
+      showToast('Error syncing form: ' + err.message);
+    }
   }
 
   // Quick preset text helpers
@@ -1535,6 +1652,8 @@
     openTravelAlertModal,
     openParentConfirmModal,
     openAckAlertModal,
+    openFormGuideModal,
+    handleSyncGoogleForms,
     insertAlertPreset,
     insertParentPreset,
     insertAckPreset

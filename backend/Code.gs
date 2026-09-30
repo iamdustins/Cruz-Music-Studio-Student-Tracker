@@ -1,12 +1,13 @@
 /**
- * Cruz Music Studio - Student Attendance Tracker
+ * Cruz Music Studio - Student Attendance & Travel Teacher Tracker
  * Google Apps Script Backend (Code.gs)
  * 
  * Features:
  * - 4-digit PIN authentication (Admin, Teacher, Family)
  * - Family-level PIN supporting multiple children per family
  * - Two-way attendance & tardiness confirmation (Parent & Teacher)
- * - Travel Teacher "Running Late / ETA" alert system with 15-minute studio notice policy enforcement
+ * - Travel Teacher "Running Late / ETA" alert system with 15-minute studio notice policy
+ * - Automatic Google Form Registration Sync (converts annual sign-up form responses into active students & auto-assigns PINs)
  * - Single-tap attendance logging (Attended, Late Student, Late Teacher, Missed, Rescheduled)
  * - Automatic unique 4-digit PIN generation
  * - Setup function to initialize Google Sheet tabs & headers automatically
@@ -18,7 +19,8 @@ const SHEET_NAMES = {
   TEACHERS: 'Teachers',
   FAMILIES_STUDENTS: 'Families_Students',
   ATTENDANCE: 'Attendance',
-  TRAVEL_ALERTS: 'Travel_Alerts'
+  TRAVEL_ALERTS: 'Travel_Alerts',
+  FORM_RESPONSES: 'Form Responses 1'
 };
 
 /**
@@ -41,6 +43,8 @@ function doGet(e) {
       response = handleGetAdminOverview();
     } else if (action === 'getTravelAlerts') {
       response = handleGetTravelAlerts(params.date, params.teacherId, params.studentId);
+    } else if (action === 'syncFormResponses') {
+      response = handleSyncFormResponses();
     } else if (action === 'generatePin') {
       response = { success: true, pin: generateUniquePin() };
     } else if (action === 'ping') {
@@ -80,6 +84,8 @@ function doPost(e) {
       response = handleSendTravelAlert(payload.data);
     } else if (action === 'ackTravelAlert') {
       response = handleAckTravelAlert(payload.alertId, payload.ackMessage);
+    } else if (action === 'syncFormResponses') {
+      response = handleSyncFormResponses();
     } else if (action === 'addFamilyStudent') {
       response = handleAddFamilyStudent(payload.data);
     } else if (action === 'addTeacher') {
@@ -125,7 +131,6 @@ function handleVerifyPin(pin) {
   const teacherSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (teacherSheet) {
     const data = teacherSheet.getDataRange().getValues();
-    // Headers: [Teacher ID, Teacher Name, 4-Digit PIN, Instrument(s), Email, Phone, Active]
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       const rowPin = String(row[2]).trim();
@@ -151,7 +156,6 @@ function handleVerifyPin(pin) {
   const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   if (famSheet) {
     const data = famSheet.getDataRange().getValues();
-    // Headers: [Family ID, Parent Name, Family 4-Digit PIN, Parent Phone, Parent Email, Student ID, Student Name, Instrument, Assigned Teacher ID, Day, Time, Status]
     const matchedStudents = [];
     let familyInfo = null;
 
@@ -209,7 +213,6 @@ function handleGetTeacherRoster(teacherId, targetDate) {
   const famData = famSheet.getDataRange().getValues();
   const students = [];
 
-  // Filter students for this teacher
   for (let i = 1; i < famData.length; i++) {
     const row = famData[i];
     const rowTeacherId = String(row[8]).trim();
@@ -231,13 +234,11 @@ function handleGetTeacherRoster(teacherId, targetDate) {
     }
   }
 
-  // Get attendance for targetDate (defaults to today in YYYY-MM-DD)
   const dateStr = targetDate || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const attendanceMap = {};
 
   if (attSheet) {
     const attData = attSheet.getDataRange().getValues();
-    // Headers: [Record ID, Date, Student ID, Teacher ID, Status, Lesson #, Teacher Notes, Parent Status, Parent Notes, Parent Confirmed At, Logged At]
     for (let j = 1; j < attData.length; j++) {
       const row = attData[j];
       const recDate = formatDateValue(row[1]);
@@ -249,7 +250,7 @@ function handleGetTeacherRoster(teacherId, targetDate) {
           date: recDate,
           studentId: recStudentId,
           teacherId: row[3],
-          status: row[4], // Attended, Late (Student), Late (Teacher), Missed, Rescheduled
+          status: row[4],
           lessonNumber: row[5],
           notes: row[6],
           parentStatus: row[7] || '',
@@ -261,7 +262,6 @@ function handleGetTeacherRoster(teacherId, targetDate) {
     }
   }
 
-  // Get today's travel alerts for this teacher
   const alertsByStudent = {};
   if (alertsSheet) {
     const alertData = alertsSheet.getDataRange().getValues();
@@ -290,7 +290,6 @@ function handleGetTeacherRoster(teacherId, targetDate) {
     }
   }
 
-  // Merge attendance status and alerts into student list
   const roster = students.map(s => {
     return {
       ...s,
@@ -348,7 +347,6 @@ function handleRecordAttendance(records) {
     }
 
     if (existingRowIndex > 0) {
-      // Update existing record
       attSheet.getRange(existingRowIndex, 4).setValue(rec.teacherId || '');
       attSheet.getRange(existingRowIndex, 5).setValue(rec.status);
       attSheet.getRange(existingRowIndex, 6).setValue(rec.lessonNumber || '');
@@ -356,7 +354,6 @@ function handleRecordAttendance(records) {
       attSheet.getRange(existingRowIndex, 11).setValue(timestamp);
       updatedCount++;
     } else {
-      // Insert new record
       const recordId = 'ATT-' + Utilities.getUuid().substring(0, 8).toUpperCase();
       attSheet.appendRow([
         recordId,
@@ -366,9 +363,9 @@ function handleRecordAttendance(records) {
         rec.status,
         rec.lessonNumber || '',
         rec.notes || '',
-        '', // Parent Status initially empty
-        '', // Parent Notes initially empty
-        '', // Parent Confirmed At
+        '',
+        '',
+        '',
         timestamp
       ]);
       insertedCount++;
@@ -410,7 +407,6 @@ function handleParentConfirmAttendance(data) {
     return { success: false, error: 'Attendance record not found' };
   }
 
-  // Update Parent Confirmation columns (Columns 8, 9, 10: Parent Status, Parent Notes, Parent Confirmed At)
   attSheet.getRange(targetRow, 8).setValue(data.parentStatus || 'Confirmed');
   attSheet.getRange(targetRow, 9).setValue(data.parentNotes || '');
   attSheet.getRange(targetRow, 10).setValue(timestamp);
@@ -424,7 +420,7 @@ function handleParentConfirmAttendance(data) {
 }
 
 // ==========================================
-// 4. TRAVEL TEACHER DELAY ALERTS & 15-MIN POLICY
+// 4. TRAVEL TEACHER DELAY ALERTS
 // ==========================================
 
 function handleSendTravelAlert(data) {
@@ -447,11 +443,9 @@ function handleSendTravelAlert(data) {
   const now = new Date();
   const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 
-  // Policy Compliance Check: Studio requires alert at least 15 minutes before scheduled lesson
   let policyStatus = 'Policy Met (15+ min notice)';
   if (data.scheduledTime) {
     try {
-      // Parse scheduledTime string (e.g. "4:00 PM" or "16:00")
       const timeMatch = data.scheduledTime.match(/(\d+):(\d+)\s*(AM|PM)?/i);
       if (timeMatch) {
         let hours = parseInt(timeMatch[1], 10);
@@ -467,9 +461,7 @@ function handleSendTravelAlert(data) {
           policyStatus = 'LATE NOTICE (<15 min notice - Policy Alert)';
         }
       }
-    } catch (e) {
-      // If parsing fails, preserve default
-    }
+    } catch (e) { }
   }
 
   const alertId = 'ALERT-' + Utilities.getUuid().substring(0, 8).toUpperCase();
@@ -569,7 +561,199 @@ function handleGetTravelAlerts(date, teacherId, studentId) {
 }
 
 // ==========================================
-// 5. FAMILY PORTAL DATA
+// 5. GOOGLE FORM REGISTRATION SYNC (AUTO-IMPORT)
+// ==========================================
+
+/**
+ * Reads Google Form responses tab and automatically registers students,
+ * links siblings to existing family PINs, or creates unique new PINs!
+ */
+function handleSyncFormResponses() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Find Form Responses sheet (checks Form Responses 1 or any tab containing 'Form' or 'Registration')
+  let formSheet = ss.getSheetByName(SHEET_NAMES.FORM_RESPONSES);
+  if (!formSheet) {
+    const allSheets = ss.getSheets();
+    for (let s = 0; s < allSheets.length; s++) {
+      const name = allSheets[s].getName().toLowerCase();
+      if (name.includes('form') || name.includes('response') || name.includes('registration')) {
+        formSheet = allSheets[s];
+        break;
+      }
+    }
+  }
+
+  if (!formSheet) {
+    return {
+      success: false,
+      error: 'Google Form Responses tab not found. In your Google Form, click "Responses" -> "Link to Sheets" and choose this spreadsheet.'
+    };
+  }
+
+  const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
+  if (!famSheet) return { success: false, error: 'Families_Students sheet missing' };
+
+  const formData = formSheet.getDataRange().getValues();
+  if (formData.length <= 1) {
+    return { success: true, syncedCount: 0, message: 'No registration responses submitted yet in Google Form.' };
+  }
+
+  const headers = formData[0].map(h => String(h).trim().toLowerCase());
+
+  // Smart Column Header Finder
+  function findCol(keywords) {
+    for (let i = 0; i < headers.length; i++) {
+      for (let k = 0; k < keywords.length; k++) {
+        if (headers[i].includes(keywords[k])) return i;
+      }
+    }
+    return -1;
+  }
+
+  const colParentName = findCol(['parent', 'guardian', 'parent/guardian']);
+  const colParentEmail = findCol(['email', 'parent email']);
+  const colParentPhone = findCol(['phone', 'mobile', 'cell', 'telephone']);
+  const colStudentName = findCol(['student name', 'child name', 'student full name', 'student']);
+  const colInstrument = findCol(['instrument', 'instruments', 'what instrument']);
+  const colSchedule = findCol(['day', 'time', 'availability', 'schedule', 'preferred']);
+  const colSiblingName = findCol(['sibling', 'child 2', 'second student', 'student 2']);
+  const colSiblingInst = findCol(['sibling instrument', 'child 2 instrument', 'instrument 2']);
+
+  // Check or create "Sync Status" tracking column in Form sheet
+  let colSyncStatus = headers.indexOf('sync status');
+  if (colSyncStatus === -1) {
+    colSyncStatus = headers.length;
+    formSheet.getRange(1, colSyncStatus + 1).setValue('Sync Status').setFontWeight('bold');
+  }
+
+  // Load existing families to avoid duplicates and to link siblings together
+  const existingFamData = famSheet.getDataRange().getValues();
+  const existingStudentsMap = new Set(); // "StudentName|ParentEmail"
+  const familyByEmail = {}; // email -> { familyId, pin, parentName, parentPhone }
+
+  for (let f = 1; f < existingFamData.length; f++) {
+    const row = existingFamData[f];
+    const famId = String(row[0]).trim();
+    const pName = String(row[1]).trim();
+    const pPin = String(row[2]).trim();
+    const pPhone = String(row[3]).trim();
+    const pEmail = String(row[4]).trim().toLowerCase();
+    const sName = String(row[6]).trim().toLowerCase();
+
+    existingStudentsMap.add(`${sName}|${pEmail}`);
+    if (pEmail && !familyByEmail[pEmail]) {
+      familyByEmail[pEmail] = { familyId: famId, pin: pPin, parentName: pName, parentPhone: pPhone };
+    }
+  }
+
+  let syncedStudentsCount = 0;
+  let skippedCount = 0;
+
+  for (let r = 1; r < formData.length; r++) {
+    const row = formData[r];
+    const currentSyncStatus = String(row[colSyncStatus] || '').trim();
+
+    // Skip already synced rows
+    if (currentSyncStatus.toLowerCase().startsWith('synced')) {
+      skippedCount++;
+      continue;
+    }
+
+    const parentName = colParentName >= 0 ? String(row[colParentName]).trim() : 'Parent';
+    const parentEmail = colParentEmail >= 0 ? String(row[colParentEmail]).trim().toLowerCase() : '';
+    const parentPhone = colParentPhone >= 0 ? String(row[colParentPhone]).trim() : '';
+    const studentName = colStudentName >= 0 ? String(row[colStudentName]).trim() : '';
+    const instrument = colInstrument >= 0 ? String(row[colInstrument]).trim() : 'Piano';
+    const scheduleRaw = colSchedule >= 0 ? String(row[colSchedule]).trim() : 'TBD';
+
+    if (!studentName) continue; // Skip blank entries
+
+    // Determine Family ID & PIN (reuses family PIN for siblings!)
+    let familyId, familyPin;
+    if (parentEmail && familyByEmail[parentEmail]) {
+      familyId = familyByEmail[parentEmail].familyId;
+      familyPin = familyByEmail[parentEmail].pin;
+    } else {
+      familyId = 'FAM-' + (100 + Object.keys(familyByEmail).length + 1);
+      familyPin = generateUniquePin();
+      if (parentEmail) {
+        familyByEmail[parentEmail] = { familyId, pin: familyPin, parentName, parentPhone };
+      }
+    }
+
+    // Add Primary Student if not already in system
+    const studentKey = `${studentName.toLowerCase()}|${parentEmail}`;
+    if (!existingStudentsMap.has(studentKey)) {
+      const studentId = 'STU-' + (famSheet.getLastRow() + 100);
+      famSheet.appendRow([
+        familyId,
+        parentName,
+        familyPin,
+        parentPhone,
+        parentEmail,
+        studentId,
+        studentName,
+        instrument,
+        'T101', // Default or Unassigned
+        'Weekday',
+        scheduleRaw,
+        'Active'
+      ]);
+      existingStudentsMap.add(studentKey);
+      syncedStudentsCount++;
+    }
+
+    // Check if Sibling 2 was also listed in this form response
+    if (colSiblingName >= 0) {
+      const siblingName = String(row[colSiblingName]).trim();
+      const siblingInst = colSiblingInst >= 0 ? String(row[colSiblingInst]).trim() : instrument;
+      const siblingKey = `${siblingName.toLowerCase()}|${parentEmail}`;
+
+      if (siblingName && !existingStudentsMap.has(siblingKey)) {
+        const sibStudentId = 'STU-' + (famSheet.getLastRow() + 100);
+        famSheet.appendRow([
+          familyId,
+          parentName,
+          familyPin,
+          parentPhone,
+          parentEmail,
+          sibStudentId,
+          siblingName,
+          siblingInst,
+          'T102',
+          'Weekday',
+          scheduleRaw,
+          'Active'
+        ]);
+        existingStudentsMap.add(siblingKey);
+        syncedStudentsCount++;
+      }
+    }
+
+    // Mark row as Synced in Google Form sheet
+    formSheet.getRange(r + 1, colSyncStatus + 1).setValue(`Synced (Family PIN: ${familyPin})`);
+  }
+
+  return {
+    success: true,
+    syncedStudentsCount: syncedStudentsCount,
+    skippedCount: skippedCount,
+    message: `Successfully synced ${syncedStudentsCount} student(s) from your Google Form!`
+  };
+}
+
+/**
+ * Installable Form Submit Trigger
+ * Automatically runs whenever a parent submits the Google Form!
+ */
+function onFormSubmit(e) {
+  Logger.log('New Google Form submission received! Auto-syncing...');
+  handleSyncFormResponses();
+}
+
+// ==========================================
+// 6. FAMILY PORTAL DATA
 // ==========================================
 
 function handleGetFamilyData(familyId) {
@@ -581,7 +765,6 @@ function handleGetFamilyData(familyId) {
 
   if (!famSheet) return { success: false, error: 'Families_Students sheet missing' };
 
-  // Teacher lookup map for names
   const teacherNames = {};
   if (teacherSheet) {
     const tData = teacherSheet.getDataRange().getValues();
@@ -590,7 +773,6 @@ function handleGetFamilyData(familyId) {
     }
   }
 
-  // Get all students belonging to this family
   const famData = famSheet.getDataRange().getValues();
   const students = [];
   let familyInfo = null;
@@ -650,7 +832,6 @@ function handleGetFamilyData(familyId) {
     }
   }
 
-  // Active travel alerts for today for this family's students
   const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const activeAlerts = [];
   if (alertsSheet) {
@@ -680,7 +861,6 @@ function handleGetFamilyData(familyId) {
     }
   }
 
-  // Sort attendance newest first
   for (const sid in attendanceByStudent) {
     attendanceByStudent[sid].sort((a, b) => new Date(b.date) - new Date(a.date));
   }
@@ -695,7 +875,7 @@ function handleGetFamilyData(familyId) {
 }
 
 // ==========================================
-// 6. ADMIN OVERVIEW & ROSTER MANAGEMENT
+// 7. ADMIN OVERVIEW & ROSTER MANAGEMENT
 // ==========================================
 
 function handleGetAdminOverview() {
@@ -869,7 +1049,7 @@ function handleAddTeacher(data) {
 }
 
 // ==========================================
-// 7. UNIQUE 4-DIGIT PIN GENERATOR
+// 8. UNIQUE 4-DIGIT PIN GENERATOR
 // ==========================================
 
 function generateUniquePin() {
@@ -910,7 +1090,7 @@ function generateUniquePin() {
 }
 
 // ==========================================
-// 8. SETUP HELPER: AUTO-INITIALIZE GOOGLE SHEET
+// 9. SETUP HELPER: AUTO-INITIALIZE GOOGLE SHEET
 // ==========================================
 
 function initializeStudioSheets() {
@@ -986,7 +1166,6 @@ function initializeStudioSheets() {
   attSheet.getRange('A1:K1').setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   attSheet.setFrozenRows(1);
 
-  // Sample Attendance Logs
   attSheet.getRange(2, 1, 4, 11).setValues([
     ['ATT-001', '2026-09-15', 'STU-201', 'T102', 'Attended', '7', 'Practiced G Major scale and Minuet in G. Excellent rhythm.', 'Confirmed Attended', 'Thank you! Leo loved the lesson.', '2026-09-15 18:00:00', '2026-09-15 16:32:00'],
     ['ATT-002', '2026-09-22', 'STU-201', 'T102', 'Late (Teacher)', '8', 'Traffic delay on I-95. Added 10 minutes to end of lesson to make up time.', 'Confirmed Late (Teacher)', 'Confirmed, thanks for making up the 10 minutes!', '2026-09-22 17:30:00', '2026-09-22 16:45:00'],
@@ -1007,7 +1186,6 @@ function initializeStudioSheets() {
   alertsSheet.getRange('A1:M1').setBackground('#854d0e').setFontColor('#ffffff').setFontWeight('bold');
   alertsSheet.setFrozenRows(1);
 
-  // Sample Travel Alerts
   alertsSheet.getRange(2, 1, 2, 13).setValues([
     [
       'ALERT-001', '2026-09-22', 'T102', 'STU-201', '4:00 PM',
@@ -1022,7 +1200,32 @@ function initializeStudioSheets() {
   ]);
   alertsSheet.autoResizeColumns(1, 13);
 
-  Logger.log('Cruz Music Studio sheets initialized successfully with Travel Alerts & Two-Way Attendance!');
+  // Tab 6: Sample Form Responses (Sample for testing Google Form sync)
+  let formSheet = ss.getSheetByName(SHEET_NAMES.FORM_RESPONSES);
+  if (!formSheet) formSheet = ss.insertSheet(SHEET_NAMES.FORM_RESPONSES);
+  formSheet.clear();
+  formSheet.getRange('A1:I1').setValues([[
+    'Timestamp', 'Parent/Guardian Full Name', 'Parent Email', 'Parent Phone Number',
+    'Student Full Name', 'Instrument of Interest', 'Preferred Days/Times',
+    'Sibling Name (Optional)', 'Sync Status'
+  ]]);
+  formSheet.getRange('A1:I1').setBackground('#065f46').setFontColor('#ffffff').setFontWeight('bold');
+  formSheet.setFrozenRows(1);
+
+  // Sample Responses ready to sync
+  formSheet.getRange(2, 1, 2, 9).setValues([
+    [
+      '2026-09-28 14:10:00', 'Heather Johnson', 'heather.j@email.com', '(555) 777-8899',
+      'Owen Johnson', 'Guitar', 'Mondays or Wednesdays 4:00 PM', '', 'Pending Sync'
+    ],
+    [
+      '2026-09-28 15:30:00', 'Maria Miller', 'maria.miller@email.com', '(555) 831-2910',
+      'Julian Miller', 'Drums', 'Tuesdays 5:30 PM', '', 'Pending Sync'
+    ]
+  ]);
+  formSheet.autoResizeColumns(1, 9);
+
+  Logger.log('Cruz Music Studio sheets initialized successfully with Google Form Sync, Travel Alerts & Two-Way Attendance!');
 }
 
 // --- UTILITIES ---

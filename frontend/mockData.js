@@ -202,5 +202,29 @@ window.CMS_MOCK_DATA = {
       parentAckMessage: '',
       parentAckAt: ''
     }
+  ],
+  pendingFormSubmissions: [
+    {
+      timestamp: '2026-09-28 14:10:00',
+      parentName: 'Heather Johnson',
+      parentEmail: 'heather.j@email.com',
+      parentPhone: '(555) 777-8899',
+      studentName: 'Owen Johnson',
+      instrument: 'Guitar',
+      schedule: 'Mondays or Wednesdays 4:00 PM',
+      teacherId: 'T101',
+      isNewFamily: true
+    },
+    {
+      timestamp: '2026-09-28 15:30:00',
+      parentName: 'Maria Miller',
+      parentEmail: 'maria.miller@email.com',
+      parentPhone: '(555) 831-2910',
+      studentName: 'Julian Miller',
+      instrument: 'Drums',
+      schedule: 'Tuesdays 5:30 PM',
+      teacherId: 'T103',
+      isNewFamily: false // Sibling joining Miller family, re-using family PIN 4421!
+    }
   ]
 };
