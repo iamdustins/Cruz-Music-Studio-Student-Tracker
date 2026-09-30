@@ -31,11 +31,12 @@ This guide shows you how to set up your Google Sheet database in **under 3 minut
    - Choose your Google account.
    - Click **Advanced** → **Go to Untitled project (unsafe)** (this is standard for your own personal script).
    - Click **Allow**.
-5. Switch back to your Google Sheet tab. You will see that **all 4 tabs have been automatically created and styled**:
+5. Switch back to your Google Sheet tab. You will see that **all 5 tabs have been automatically created and styled**:
    - ⚙️ **Settings**: Studio name & Admin PIN (`9900`).
    - 🎵 **Teachers**: Pre-filled with 10 instructor rows, instruments, and 4-digit PINs.
    - 👨‍👩‍👧 **Families_Students**: Multi-sibling family rows with shared family PINs.
-   - 📋 **Attendance**: Ready to receive real-time attendance logs.
+   - 📋 **Attendance**: Two-way attendance log (Attended, Late Student, Late Teacher, Missed, Rescheduled, Teacher Notes, Parent Confirmation & Notes).
+   - 🚗 **Travel_Alerts**: Real-time delay notices with 15-minute advance notice policy tracking and parent acknowledgment responses.
 
 ---
 

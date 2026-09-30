@@ -5,7 +5,9 @@
  * Features:
  * - 4-digit PIN authentication (Admin, Teacher, Family)
  * - Family-level PIN supporting multiple children per family
- * - Single-tap attendance logging (Attended, Late, Missed, Rescheduled)
+ * - Two-way attendance & tardiness confirmation (Parent & Teacher)
+ * - Travel Teacher "Running Late / ETA" alert system with 15-minute studio notice policy enforcement
+ * - Single-tap attendance logging (Attended, Late Student, Late Teacher, Missed, Rescheduled)
  * - Automatic unique 4-digit PIN generation
  * - Setup function to initialize Google Sheet tabs & headers automatically
  */
@@ -15,7 +17,8 @@ const SHEET_NAMES = {
   SETTINGS: 'Settings',
   TEACHERS: 'Teachers',
   FAMILIES_STUDENTS: 'Families_Students',
-  ATTENDANCE: 'Attendance'
+  ATTENDANCE: 'Attendance',
+  TRAVEL_ALERTS: 'Travel_Alerts'
 };
 
 /**
@@ -36,6 +39,8 @@ function doGet(e) {
       response = handleGetFamilyData(params.familyId);
     } else if (action === 'getAdminOverview') {
       response = handleGetAdminOverview();
+    } else if (action === 'getTravelAlerts') {
+      response = handleGetTravelAlerts(params.date, params.teacherId, params.studentId);
     } else if (action === 'generatePin') {
       response = { success: true, pin: generateUniquePin() };
     } else if (action === 'ping') {
@@ -69,6 +74,12 @@ function doPost(e) {
       response = handleVerifyPin(payload.pin);
     } else if (action === 'recordAttendance') {
       response = handleRecordAttendance(payload.records);
+    } else if (action === 'parentConfirmAttendance') {
+      response = handleParentConfirmAttendance(payload.data);
+    } else if (action === 'sendTravelAlert') {
+      response = handleSendTravelAlert(payload.data);
+    } else if (action === 'ackTravelAlert') {
+      response = handleAckTravelAlert(payload.alertId, payload.ackMessage);
     } else if (action === 'addFamilyStudent') {
       response = handleAddFamilyStudent(payload.data);
     } else if (action === 'addTeacher') {
@@ -191,6 +202,7 @@ function handleGetTeacherRoster(teacherId, targetDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   const attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
+  const alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
 
   if (!famSheet) return { success: false, error: 'Families_Students sheet missing' };
 
@@ -225,6 +237,7 @@ function handleGetTeacherRoster(teacherId, targetDate) {
 
   if (attSheet) {
     const attData = attSheet.getDataRange().getValues();
+    // Headers: [Record ID, Date, Student ID, Teacher ID, Status, Lesson #, Teacher Notes, Parent Status, Parent Notes, Parent Confirmed At, Logged At]
     for (let j = 1; j < attData.length; j++) {
       const row = attData[j];
       const recDate = formatDateValue(row[1]);
@@ -236,24 +249,59 @@ function handleGetTeacherRoster(teacherId, targetDate) {
           date: recDate,
           studentId: recStudentId,
           teacherId: row[3],
-          status: row[4], // Attended, Missed, Late, Rescheduled
+          status: row[4], // Attended, Late (Student), Late (Teacher), Missed, Rescheduled
           lessonNumber: row[5],
           notes: row[6],
-          loggedAt: row[7]
+          parentStatus: row[7] || '',
+          parentNotes: row[8] || '',
+          parentConfirmedAt: row[9] || '',
+          loggedAt: row[10] || ''
         };
       }
     }
   }
 
-  // Merge attendance status into student list
+  // Get today's travel alerts for this teacher
+  const alertsByStudent = {};
+  if (alertsSheet) {
+    const alertData = alertsSheet.getDataRange().getValues();
+    for (let a = 1; a < alertData.length; a++) {
+      const row = alertData[a];
+      const aDate = formatDateValue(row[1]);
+      const aTeacher = String(row[2]).trim();
+      const aStudent = String(row[3]).trim();
+      if (aDate === dateStr && aTeacher === String(teacherId).trim()) {
+        alertsByStudent[aStudent] = {
+          alertId: row[0],
+          date: aDate,
+          teacherId: row[2],
+          studentId: aStudent,
+          scheduledTime: row[4],
+          delayMins: row[5],
+          reason: row[6],
+          message: row[7],
+          sentAt: row[8],
+          policyStatus: row[9],
+          parentAcknowledged: row[10],
+          parentAckMessage: row[11],
+          parentAckAt: row[12]
+        };
+      }
+    }
+  }
+
+  // Merge attendance status and alerts into student list
   const roster = students.map(s => {
     return {
       ...s,
       attendance: attendanceMap[s.studentId] || {
         status: 'Unmarked',
         lessonNumber: '',
-        notes: ''
-      }
+        notes: '',
+        parentStatus: '',
+        parentNotes: ''
+      },
+      activeAlert: alertsByStudent[s.studentId] || null
     };
   });
 
@@ -274,7 +322,10 @@ function handleRecordAttendance(records) {
   let attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
   if (!attSheet) {
     attSheet = ss.insertSheet(SHEET_NAMES.ATTENDANCE);
-    attSheet.appendRow(['Record ID', 'Date', 'Student ID', 'Teacher ID', 'Status', 'Lesson #', 'Notes', 'Logged At']);
+    attSheet.appendRow([
+      'Record ID', 'Date', 'Student ID', 'Teacher ID', 'Status', 'Lesson #',
+      'Teacher Notes', 'Parent Status', 'Parent Notes', 'Parent Confirmed At', 'Logged At'
+    ]);
   }
 
   const attData = attSheet.getDataRange().getValues();
@@ -287,12 +338,11 @@ function handleRecordAttendance(records) {
     const cleanStudentId = String(rec.studentId).trim();
     let existingRowIndex = -1;
 
-    // Check if attendance row already exists for this student on this date
     for (let i = 1; i < attData.length; i++) {
       const rowDate = formatDateValue(attData[i][1]);
       const rowStudentId = String(attData[i][2]).trim();
       if (rowDate === cleanDate && rowStudentId === cleanStudentId) {
-        existingRowIndex = i + 1; // 1-indexed for sheet
+        existingRowIndex = i + 1;
         break;
       }
     }
@@ -303,7 +353,7 @@ function handleRecordAttendance(records) {
       attSheet.getRange(existingRowIndex, 5).setValue(rec.status);
       attSheet.getRange(existingRowIndex, 6).setValue(rec.lessonNumber || '');
       attSheet.getRange(existingRowIndex, 7).setValue(rec.notes || '');
-      attSheet.getRange(existingRowIndex, 8).setValue(timestamp);
+      attSheet.getRange(existingRowIndex, 11).setValue(timestamp);
       updatedCount++;
     } else {
       // Insert new record
@@ -316,6 +366,9 @@ function handleRecordAttendance(records) {
         rec.status,
         rec.lessonNumber || '',
         rec.notes || '',
+        '', // Parent Status initially empty
+        '', // Parent Notes initially empty
+        '', // Parent Confirmed At
         timestamp
       ]);
       insertedCount++;
@@ -330,13 +383,200 @@ function handleRecordAttendance(records) {
 }
 
 // ==========================================
-// 3. FAMILY PORTAL DATA
+// 3. TWO-WAY ATTENDANCE CONFIRMATION (PARENTS)
+// ==========================================
+
+function handleParentConfirmAttendance(data) {
+  if (!data || !data.recordId) {
+    return { success: false, error: 'Record ID is required for parent confirmation' };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
+  if (!attSheet) return { success: false, error: 'Attendance sheet missing' };
+
+  const attData = attSheet.getDataRange().getValues();
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  let targetRow = -1;
+
+  for (let i = 1; i < attData.length; i++) {
+    if (String(attData[i][0]).trim() === String(data.recordId).trim()) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow < 0) {
+    return { success: false, error: 'Attendance record not found' };
+  }
+
+  // Update Parent Confirmation columns (Columns 8, 9, 10: Parent Status, Parent Notes, Parent Confirmed At)
+  attSheet.getRange(targetRow, 8).setValue(data.parentStatus || 'Confirmed');
+  attSheet.getRange(targetRow, 9).setValue(data.parentNotes || '');
+  attSheet.getRange(targetRow, 10).setValue(timestamp);
+
+  return {
+    success: true,
+    recordId: data.recordId,
+    parentStatus: data.parentStatus,
+    confirmedAt: timestamp
+  };
+}
+
+// ==========================================
+// 4. TRAVEL TEACHER DELAY ALERTS & 15-MIN POLICY
+// ==========================================
+
+function handleSendTravelAlert(data) {
+  if (!data || !data.teacherId || !data.studentId) {
+    return { success: false, error: 'Teacher ID and Student ID are required' };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
+  if (!alertsSheet) {
+    alertsSheet = ss.insertSheet(SHEET_NAMES.TRAVEL_ALERTS);
+    alertsSheet.appendRow([
+      'Alert ID', 'Date', 'Teacher ID', 'Student ID', 'Scheduled Time',
+      'Estimated Delay', 'Reason', 'Teacher Message', 'Sent At',
+      'Policy Notice Status', 'Parent Acknowledged', 'Parent Ack Message', 'Parent Ack At'
+    ]);
+  }
+
+  const dateStr = data.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const now = new Date();
+  const timestamp = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+
+  // Policy Compliance Check: Studio requires alert at least 15 minutes before scheduled lesson
+  let policyStatus = 'Policy Met (15+ min notice)';
+  if (data.scheduledTime) {
+    try {
+      // Parse scheduledTime string (e.g. "4:00 PM" or "16:00")
+      const timeMatch = data.scheduledTime.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1], 10);
+        const mins = parseInt(timeMatch[2], 10);
+        const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+
+        const schedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, mins, 0);
+        const diffMinutes = Math.round((schedDate.getTime() - now.getTime()) / (60 * 1000));
+
+        if (diffMinutes < 15) {
+          policyStatus = 'LATE NOTICE (<15 min notice - Policy Alert)';
+        }
+      }
+    } catch (e) {
+      // If parsing fails, preserve default
+    }
+  }
+
+  const alertId = 'ALERT-' + Utilities.getUuid().substring(0, 8).toUpperCase();
+  alertsSheet.appendRow([
+    alertId,
+    dateStr,
+    data.teacherId,
+    data.studentId,
+    data.scheduledTime || '',
+    data.delayMins || '15 mins',
+    data.reason || 'Traffic Delay',
+    data.message || 'Running behind due to traffic. Will make up time!',
+    timestamp,
+    policyStatus,
+    'Pending',
+    '',
+    ''
+  ]);
+
+  return {
+    success: true,
+    alertId: alertId,
+    policyStatus: policyStatus,
+    sentAt: timestamp
+  };
+}
+
+function handleAckTravelAlert(alertId, ackMessage) {
+  if (!alertId) return { success: false, error: 'Alert ID required' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
+  if (!alertsSheet) return { success: false, error: 'Travel_Alerts sheet missing' };
+
+  const data = alertsSheet.getDataRange().getValues();
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  let targetRow = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(alertId).trim()) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow < 0) return { success: false, error: 'Alert not found' };
+
+  alertsSheet.getRange(targetRow, 11).setValue('Yes');
+  alertsSheet.getRange(targetRow, 12).setValue(ackMessage || 'Acknowledged by parent');
+  alertsSheet.getRange(targetRow, 13).setValue(timestamp);
+
+  return {
+    success: true,
+    alertId: alertId,
+    acknowledgedAt: timestamp
+  };
+}
+
+function handleGetTravelAlerts(date, teacherId, studentId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
+  if (!alertsSheet) return { success: true, alerts: [] };
+
+  const data = alertsSheet.getDataRange().getValues();
+  const cleanDate = date ? formatDateValue(date) : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const results = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const rDate = formatDateValue(row[1]);
+    const rTeacher = String(row[2]).trim();
+    const rStudent = String(row[3]).trim();
+
+    const dateMatch = !cleanDate || rDate === cleanDate;
+    const teacherMatch = !teacherId || rTeacher === String(teacherId).trim();
+    const studentMatch = !studentId || rStudent === String(studentId).trim();
+
+    if (dateMatch && teacherMatch && studentMatch) {
+      results.push({
+        alertId: row[0],
+        date: rDate,
+        teacherId: row[2],
+        studentId: row[3],
+        scheduledTime: row[4],
+        delayMins: row[5],
+        reason: row[6],
+        message: row[7],
+        sentAt: row[8],
+        policyStatus: row[9],
+        parentAcknowledged: row[10],
+        parentAckMessage: row[11],
+        parentAckAt: row[12]
+      });
+    }
+  }
+
+  return { success: true, alerts: results };
+}
+
+// ==========================================
+// 5. FAMILY PORTAL DATA
 // ==========================================
 
 function handleGetFamilyData(familyId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   const attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
+  const alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
   const teacherSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
 
   if (!famSheet) return { success: false, error: 'Families_Students sheet missing' };
@@ -383,7 +623,6 @@ function handleGetFamilyData(familyId) {
     return { success: false, error: 'Family not found' };
   }
 
-  // Fetch attendance records for each student
   const studentIds = students.map(s => s.studentId);
   const attendanceByStudent = {};
   studentIds.forEach(id => attendanceByStudent[id] = []);
@@ -402,7 +641,40 @@ function handleGetFamilyData(familyId) {
           status: row[4],
           lessonNumber: row[5],
           notes: row[6],
-          loggedAt: row[7]
+          parentStatus: row[7] || '',
+          parentNotes: row[8] || '',
+          parentConfirmedAt: row[9] || '',
+          loggedAt: row[10] || ''
+        });
+      }
+    }
+  }
+
+  // Active travel alerts for today for this family's students
+  const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const activeAlerts = [];
+  if (alertsSheet) {
+    const aData = alertsSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      const row = aData[a];
+      const aDate = formatDateValue(row[1]);
+      const aStudentId = String(row[3]).trim();
+      if (aDate === todayStr && studentIds.indexOf(aStudentId) !== -1) {
+        activeAlerts.push({
+          alertId: row[0],
+          date: aDate,
+          teacherId: row[2],
+          teacherName: teacherNames[String(row[2]).trim()] || row[2],
+          studentId: aStudentId,
+          scheduledTime: row[4],
+          delayMins: row[5],
+          reason: row[6],
+          message: row[7],
+          sentAt: row[8],
+          policyStatus: row[9],
+          parentAcknowledged: row[10],
+          parentAckMessage: row[11],
+          parentAckAt: row[12]
         });
       }
     }
@@ -417,12 +689,13 @@ function handleGetFamilyData(familyId) {
     success: true,
     family: familyInfo,
     students: students,
-    attendance: attendanceByStudent
+    attendance: attendanceByStudent,
+    activeAlerts: activeAlerts
   };
 }
 
 // ==========================================
-// 4. ADMIN OVERVIEW & ROSTER MANAGEMENT
+// 6. ADMIN OVERVIEW & ROSTER MANAGEMENT
 // ==========================================
 
 function handleGetAdminOverview() {
@@ -430,6 +703,7 @@ function handleGetAdminOverview() {
   const teacherSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   const attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
+  const alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
   const settingsSheet = ss.getSheetByName(SHEET_NAMES.SETTINGS);
 
   const teachers = [];
@@ -472,8 +746,7 @@ function handleGetAdminOverview() {
   const recentAttendance = [];
   if (attSheet) {
     const data = attSheet.getDataRange().getValues();
-    // Grab last 50 attendance records
-    const startIdx = Math.max(1, data.length - 50);
+    const startIdx = Math.max(1, data.length - 60);
     for (let i = startIdx; i < data.length; i++) {
       recentAttendance.unshift({
         recordId: data[i][0],
@@ -483,7 +756,33 @@ function handleGetAdminOverview() {
         status: data[i][4],
         lessonNumber: data[i][5],
         notes: data[i][6],
-        loggedAt: data[i][7]
+        parentStatus: data[i][7] || '',
+        parentNotes: data[i][8] || '',
+        parentConfirmedAt: data[i][9] || '',
+        loggedAt: data[i][10] || ''
+      });
+    }
+  }
+
+  const travelAlerts = [];
+  if (alertsSheet) {
+    const aData = alertsSheet.getDataRange().getValues();
+    const aStart = Math.max(1, aData.length - 40);
+    for (let a = aStart; a < aData.length; a++) {
+      travelAlerts.unshift({
+        alertId: aData[a][0],
+        date: formatDateValue(aData[a][1]),
+        teacherId: aData[a][2],
+        studentId: aData[a][3],
+        scheduledTime: aData[a][4],
+        delayMins: aData[a][5],
+        reason: aData[a][6],
+        message: aData[a][7],
+        sentAt: aData[a][8],
+        policyStatus: aData[a][9],
+        parentAcknowledged: aData[a][10],
+        parentAckMessage: aData[a][11],
+        parentAckAt: aData[a][12]
       });
     }
   }
@@ -499,7 +798,8 @@ function handleGetAdminOverview() {
     totalStudents: familiesStudents.length,
     teachers: teachers,
     familiesStudents: familiesStudents,
-    recentAttendance: recentAttendance
+    recentAttendance: recentAttendance,
+    travelAlerts: travelAlerts
   };
 }
 
@@ -508,7 +808,6 @@ function handleAddFamilyStudent(data) {
   const famSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   if (!famSheet) return { success: false, error: 'Sheet Families_Students missing' };
 
-  // Use provided family PIN or generate a unique one
   let pin = data.pin;
   if (!pin || String(pin).trim() === '') {
     pin = generateUniquePin();
@@ -570,20 +869,18 @@ function handleAddTeacher(data) {
 }
 
 // ==========================================
-// 5. UNIQUE 4-DIGIT PIN GENERATOR
+// 7. UNIQUE 4-DIGIT PIN GENERATOR
 // ==========================================
 
 function generateUniquePin() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const usedPins = new Set();
 
-  // Collect Admin PIN
   const setSheet = ss.getSheetByName(SHEET_NAMES.SETTINGS);
   if (setSheet) {
     usedPins.add(String(setSheet.getRange('B2').getValue()).trim());
   }
 
-  // Collect Teacher PINs
   const tSheet = ss.getSheetByName(SHEET_NAMES.TEACHERS);
   if (tSheet) {
     const tData = tSheet.getDataRange().getValues();
@@ -592,7 +889,6 @@ function generateUniquePin() {
     }
   }
 
-  // Collect Family PINs
   const fSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   if (fSheet) {
     const fData = fSheet.getDataRange().getValues();
@@ -601,7 +897,6 @@ function generateUniquePin() {
     }
   }
 
-  // Generate random 4-digit code (1000 - 9999) that is NOT in usedPins
   let attempts = 0;
   while (attempts < 1000) {
     const candidate = String(Math.floor(1000 + Math.random() * 9000));
@@ -611,18 +906,13 @@ function generateUniquePin() {
     attempts++;
   }
 
-  // Fallback fallback if almost all pins used
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 // ==========================================
-// 6. SETUP HELPER: AUTO-INITIALIZE GOOGLE SHEET
+// 8. SETUP HELPER: AUTO-INITIALIZE GOOGLE SHEET
 // ==========================================
 
-/**
- * RUN THIS FUNCTION ONCE IN THE APPS SCRIPT EDITOR
- * To automatically configure tabs, columns, formats, and sample data!
- */
 function initializeStudioSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -649,7 +939,7 @@ function initializeStudioSheets() {
   tSheet.getRange('A1:G1').setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   tSheet.setFrozenRows(1);
 
-  // Add 10 initial sample teachers
+  // 10 initial sample teachers
   tSheet.getRange(2, 1, 10, 7).setValues([
     ['T101', 'David Cruz', '1101', 'Guitar, Bass', 'david@cruzmusicstudio.com', '(555) 234-1001', 'Yes'],
     ['T102', 'Sarah Jenkins', '1102', 'Piano, Voice', 'sarah@cruzmusicstudio.com', '(555) 234-1002', 'Yes'],
@@ -664,7 +954,7 @@ function initializeStudioSheets() {
   ]);
   tSheet.autoResizeColumns(1, 7);
 
-  // Tab 3: Families & Students (Multi-student family PIN)
+  // Tab 3: Families & Students
   let fSheet = ss.getSheetByName(SHEET_NAMES.FAMILIES_STUDENTS);
   if (!fSheet) fSheet = ss.insertSheet(SHEET_NAMES.FAMILIES_STUDENTS);
   fSheet.clear();
@@ -675,39 +965,64 @@ function initializeStudioSheets() {
   fSheet.getRange('A1:L1').setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   fSheet.setFrozenRows(1);
 
-  // Sample Families (illustrating one family PIN for siblings!)
+  // Sample Families
   fSheet.getRange(2, 1, 5, 12).setValues([
-    // Miller Family (2 kids: Leo & Maya, sharing family PIN 4421)
     ['FAM-101', 'Maria Miller', '4421', '(555) 831-2910', 'maria.miller@email.com', 'STU-201', 'Leo Miller', 'Piano', 'T102', 'Tuesday', '4:00 PM', 'Active'],
     ['FAM-101', 'Maria Miller', '4421', '(555) 831-2910', 'maria.miller@email.com', 'STU-202', 'Maya Miller', 'Violin', 'T104', 'Tuesday', '4:45 PM', 'Active'],
-    // Davis Family
     ['FAM-102', 'Robert Davis', '7819', '(555) 441-9921', 'rdavis@email.com', 'STU-203', 'Ethan Davis', 'Guitar', 'T101', 'Wednesday', '5:00 PM', 'Active'],
-    // Chen Family (2 kids: Chloe & Lucas, sharing family PIN 5133)
     ['FAM-103', 'Grace Chen', '5133', '(555) 321-7788', 'grace.chen@email.com', 'STU-204', 'Chloe Chen', 'Piano', 'T106', 'Thursday', '3:30 PM', 'Active'],
     ['FAM-103', 'Grace Chen', '5133', '(555) 321-7788', 'grace.chen@email.com', 'STU-205', 'Lucas Chen', 'Drums', 'T103', 'Thursday', '4:15 PM', 'Active']
   ]);
   fSheet.autoResizeColumns(1, 12);
 
-  // Tab 4: Attendance Log
+  // Tab 4: Attendance Log with Two-Way Fields
   let attSheet = ss.getSheetByName(SHEET_NAMES.ATTENDANCE);
   if (!attSheet) attSheet = ss.insertSheet(SHEET_NAMES.ATTENDANCE);
   attSheet.clear();
-  attSheet.getRange('A1:H1').setValues([[
-    'Record ID', 'Date', 'Student ID', 'Teacher ID', 'Status', 'Lesson #', 'Notes / Teacher Comments', 'Logged At'
+  attSheet.getRange('A1:K1').setValues([[
+    'Record ID', 'Date', 'Student ID', 'Teacher ID', 'Status', 'Lesson #',
+    'Teacher Notes', 'Parent Status', 'Parent Notes', 'Parent Confirmed At', 'Logged At'
   ]]);
-  attSheet.getRange('A1:H1').setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+  attSheet.getRange('A1:K1').setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
   attSheet.setFrozenRows(1);
 
   // Sample Attendance Logs
-  attSheet.getRange(2, 1, 4, 8).setValues([
-    ['ATT-001', '2026-09-15', 'STU-201', 'T102', 'Attended', '7', 'Practiced G Major scale and Minuet in G. Excellent rhythm.', '2026-09-15 16:32:00'],
-    ['ATT-002', '2026-09-22', 'STU-201', 'T102', 'Attended', '8', 'Introduced Sonatina in C. Practice bars 1-8 daily.', '2026-09-22 16:31:00'],
-    ['ATT-003', '2026-09-15', 'STU-202', 'T104', 'Late', '6', 'Arrived 10 mins late; worked on bow posture and Suzuki book 1.', '2026-09-15 17:15:00'],
-    ['ATT-004', '2026-09-22', 'STU-202', 'T104', 'Rescheduled', '7', 'Family notified ahead; rescheduled to Saturday 10:00 AM.', '2026-09-21 18:00:00']
+  attSheet.getRange(2, 1, 4, 11).setValues([
+    ['ATT-001', '2026-09-15', 'STU-201', 'T102', 'Attended', '7', 'Practiced G Major scale and Minuet in G. Excellent rhythm.', 'Confirmed Attended', 'Thank you! Leo loved the lesson.', '2026-09-15 18:00:00', '2026-09-15 16:32:00'],
+    ['ATT-002', '2026-09-22', 'STU-201', 'T102', 'Late (Teacher)', '8', 'Traffic delay on I-95. Added 10 minutes to end of lesson to make up time.', 'Confirmed Late (Teacher)', 'Confirmed, thanks for making up the 10 minutes!', '2026-09-22 17:30:00', '2026-09-22 16:45:00'],
+    ['ATT-003', '2026-09-15', 'STU-202', 'T104', 'Late (Student)', '6', 'Student arrived 10 mins late; worked on bow posture and Suzuki book 1.', 'Confirmed Late (Student)', 'Sorry we were running behind today! Thank you for your patience.', '2026-09-15 17:45:00', '2026-09-15 17:15:00'],
+    ['ATT-004', '2026-09-22', 'STU-202', 'T104', 'Rescheduled', '7', 'Family notified ahead; rescheduled to Saturday 10:00 AM.', 'Confirmed Rescheduled', 'Looking forward to Saturday morning makeup.', '2026-09-21 19:00:00', '2026-09-21 18:00:00']
   ]);
-  attSheet.autoResizeColumns(1, 8);
+  attSheet.autoResizeColumns(1, 11);
 
-  Logger.log('Cruz Music Studio sheets initialized successfully!');
+  // Tab 5: Travel Alerts Log
+  let alertsSheet = ss.getSheetByName(SHEET_NAMES.TRAVEL_ALERTS);
+  if (!alertsSheet) alertsSheet = ss.insertSheet(SHEET_NAMES.TRAVEL_ALERTS);
+  alertsSheet.clear();
+  alertsSheet.getRange('A1:M1').setValues([[
+    'Alert ID', 'Date', 'Teacher ID', 'Student ID', 'Scheduled Time',
+    'Estimated Delay', 'Reason', 'Teacher Message', 'Sent At',
+    'Policy Notice Status', 'Parent Acknowledged', 'Parent Ack Message', 'Parent Ack At'
+  ]]);
+  alertsSheet.getRange('A1:M1').setBackground('#854d0e').setFontColor('#ffffff').setFontWeight('bold');
+  alertsSheet.setFrozenRows(1);
+
+  // Sample Travel Alerts
+  alertsSheet.getRange(2, 1, 2, 13).setValues([
+    [
+      'ALERT-001', '2026-09-22', 'T102', 'STU-201', '4:00 PM',
+      '15 mins', 'Highway Traffic / Accident', 'Accident on I-95, moving slowly. ETA 4:15 PM. Will make up the 15 mins at end of lesson!',
+      '2026-09-22 15:35:00', 'Policy Met (15+ min notice)', 'Yes', 'No problem, drive safe!', '2026-09-22 15:40:00'
+    ],
+    [
+      'ALERT-002', '2026-09-22', 'T104', 'STU-202', '4:45 PM',
+      '20 mins', 'Severe Weather / Rain', 'Heavy storm on route. ETA 5:05 PM. Will make up time.',
+      '2026-09-22 16:38:00', 'LATE NOTICE (<15 min notice - Policy Alert)', 'Pending', '', ''
+    ]
+  ]);
+  alertsSheet.autoResizeColumns(1, 13);
+
+  Logger.log('Cruz Music Studio sheets initialized successfully with Travel Alerts & Two-Way Attendance!');
 }
 
 // --- UTILITIES ---
@@ -717,7 +1032,6 @@ function formatDateValue(val) {
     return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
   const str = String(val).trim();
-  // If in YYYY-MM-DD format
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
     return str.substring(0, 10);
   }

@@ -14,6 +14,10 @@
   --status-late: #F59E0B;
   --status-late-bg: #FFFBEB;
   --status-late-border: #FDE68A;
+
+  --status-late-teacher: #D97706;
+  --status-late-teacher-bg: #FEF3C7;
+  --status-late-teacher-border: #FCD34D;
   
   --status-missed: #EF4444;
   --status-missed-bg: #FEF2F2;
@@ -134,7 +138,7 @@ body {
 /* Container */
 .main-container {
   flex: 1;
-  max-width: 1080px;
+  max-width: 1100px;
   width: 100%;
   margin: 0 auto;
   padding: 24px 16px;
@@ -351,6 +355,132 @@ body {
 }
 
 /* ============================================================
+   TRAVEL ALERT BANNER (PARENT PORTAL & DASHBOARD)
+   ============================================================ */
+.travel-alert-container {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.travel-alert-banner {
+  background: #FFFBEB;
+  border: 2px solid #F59E0B;
+  border-radius: var(--border-radius);
+  padding: 18px 22px;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: pulseBorder 3s infinite;
+}
+
+@keyframes pulseBorder {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.travel-alert-banner.acknowledged {
+  border-color: #CBD5E1;
+  background: #F8FAFC;
+  box-shadow: var(--shadow-sm);
+  animation: none;
+}
+
+.alert-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.alert-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alert-icon-car {
+  font-size: 1.6rem;
+  background: #FEF3C7;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alert-title-wrap h4 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #92400E;
+}
+
+.alert-title-wrap p {
+  font-size: 0.85rem;
+  color: #78350F;
+  margin-top: 2px;
+}
+
+.policy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.policy-badge.met {
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.policy-badge.late {
+  background: #FEF2F2;
+  color: #991B1B;
+  border: 1px solid #FECACA;
+}
+
+.alert-message-box {
+  background: white;
+  border: 1px solid #FDE68A;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  color: #78350F;
+  line-height: 1.45;
+}
+
+.alert-message-box strong {
+  color: #92400E;
+}
+
+.alert-action-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.parent-ack-text {
+  font-size: 0.85rem;
+  color: #065F46;
+  background: #ECFDF5;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #A7F3D0;
+}
+
+/* ============================================================
    TEACHER PORTAL
    ============================================================ */
 .teacher-controls {
@@ -390,7 +520,7 @@ body {
   background: white;
   border-radius: var(--border-radius);
   padding: 20px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -404,7 +534,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .student-name-block h3 {
@@ -420,6 +552,7 @@ body {
   align-items: center;
   gap: 8px;
   margin-top: 4px;
+  flex-wrap: wrap;
 }
 
 .instrument-tag {
@@ -431,10 +564,44 @@ body {
   font-size: 0.75rem;
 }
 
-/* Status Button Group */
+/* Quick Travel Delay Button on Student Card */
+.btn-travel-delay {
+  background: #FFFBEB;
+  color: #92400E;
+  border: 1px solid #FCD34D;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-travel-delay:hover {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+}
+
+.card-alert-badge {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 5 Status Buttons (including Student Tardy and Teacher Tardy) */
 .status-buttons {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin: 14px 0;
 }
@@ -442,7 +609,7 @@ body {
 .btn-status {
   padding: 10px 4px;
   border-radius: 10px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   border: 1px solid transparent;
   cursor: pointer;
@@ -453,6 +620,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  text-align: center;
 }
 
 .btn-status span.status-icon {
@@ -471,11 +639,18 @@ body {
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
 }
 
-.btn-status.late.active {
+.btn-status.late-student.active {
   background: var(--status-late);
   color: white;
   border-color: #D97706;
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+.btn-status.late-teacher.active {
+  background: var(--status-late-teacher);
+  color: white;
+  border-color: #B45309;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
 }
 
 .btn-status.missed.active {
@@ -532,6 +707,20 @@ body {
 
 .btn-save-row:hover {
   background: #1e293b;
+}
+
+/* Parent Note Banner displayed on Teacher's Student Card */
+.card-parent-feedback {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ============================================================
@@ -598,13 +787,14 @@ body {
   color: var(--primary-navy);
 }
 
-/* Attendance Timeline Table */
+/* Attendance Timeline Table & Two-Way Dialogue */
 .timeline-card {
   background: white;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  margin-bottom: 24px;
 }
 
 .table-header {
@@ -638,7 +828,7 @@ body {
 .attendance-table td {
   padding: 16px 18px;
   border-bottom: 1px solid var(--border-color);
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .status-badge {
@@ -649,6 +839,7 @@ body {
   border-radius: 20px;
   font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-badge.Attended {
@@ -657,10 +848,16 @@ body {
   border: 1px solid var(--status-attended-border);
 }
 
-.status-badge.Late {
+.status-badge.LateStudent, .status-badge.Late {
   background: var(--status-late-bg);
   color: var(--status-late);
   border: 1px solid var(--status-late-border);
+}
+
+.status-badge.LateTeacher {
+  background: var(--status-late-teacher-bg);
+  color: var(--status-late-teacher);
+  border: 1px solid var(--status-late-teacher-border);
 }
 
 .status-badge.Missed {
@@ -675,6 +872,64 @@ body {
   border: 1px solid var(--status-rescheduled-border);
 }
 
+/* Two-Way Notes Stack in Timeline Table */
+.notes-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.teacher-note-bubble {
+  background: #F8FAFC;
+  border-left: 3px solid var(--primary-navy);
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.parent-note-bubble {
+  background: #FEF9C3;
+  border-left: 3px solid var(--accent-gold-dark);
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  color: var(--accent-gold-dark);
+  line-height: 1.4;
+}
+
+.btn-confirm-action {
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-confirm-action:hover {
+  background: #D1FAE5;
+  border-color: #6EE7B7;
+}
+
+.confirmed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #065F46;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 /* ============================================================
    ADMIN DASHBOARD
    ============================================================ */
@@ -682,6 +937,7 @@ body {
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .admin-tab {
@@ -748,6 +1004,37 @@ body {
   background: var(--accent-gold-hover);
 }
 
+/* Delay & Reason Selectors in Modal */
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.chip-option {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #F8FAFC;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.chip-option:hover {
+  background: #F1F5F9;
+}
+
+.chip-option.selected {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+  color: #92400E;
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.2);
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;
@@ -771,10 +1058,12 @@ body {
 .modal-box {
   background: white;
   border-radius: 18px;
-  max-width: 500px;
+  max-width: 520px;
   width: 100%;
   padding: 28px;
   box-shadow: var(--shadow-lg);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .modal-header {
@@ -810,13 +1099,20 @@ body {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   font-size: 0.9rem;
   outline: none;
+  font-family: inherit;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 70px;
 }
 
 .pin-field-wrap {
@@ -864,12 +1160,12 @@ body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .status-buttons {
+    grid-template-columns: repeat(3, 1fr);
+  }
   .card-inputs {
     grid-template-columns: 1fr;
-  }
-  .status-buttons {
-    grid-template-columns: repeat(2, 1fr);
   }
   .app-header {
     padding: 12px 16px;
@@ -877,5 +1173,11 @@ body {
   .student-hero-banner {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-buttons {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

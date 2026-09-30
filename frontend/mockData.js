@@ -7,7 +7,8 @@ window.CMS_MOCK_DATA = {
     studioName: 'Cruz Music Studio',
     adminPin: '9900',
     contactEmail: 'info@cruzmusicstudio.com',
-    phone: '(555) 234-CRUZ'
+    phone: '(555) 234-CRUZ',
+    noticePolicyMinutes: 15 // Studio policy: 15 minutes minimum notice for travel delays
   },
   teachers: [
     { id: 'T101', name: 'David Cruz', pin: '1101', instruments: 'Guitar, Bass', email: 'david@cruzmusicstudio.com', phone: '(555) 234-1001', active: 'Yes' },
@@ -94,7 +95,10 @@ window.CMS_MOCK_DATA = {
       teacherId: 'T102',
       status: 'Attended',
       lessonNumber: '7',
-      notes: 'Worked on Bach Minuet in G. Great wrist position and dynamics.',
+      notes: 'Worked on Bach Minuet in G. Great wrist position and dynamic control.',
+      parentStatus: 'Confirmed Attended',
+      parentNotes: 'Thank you! Leo loved practicing with the metronome.',
+      parentConfirmedAt: '2026-09-15 18:00:00',
       loggedAt: '2026-09-15 16:32:00'
     },
     {
@@ -102,19 +106,25 @@ window.CMS_MOCK_DATA = {
       date: '2026-09-22',
       studentId: 'STU-201',
       teacherId: 'T102',
-      status: 'Attended',
+      status: 'Late (Teacher)',
       lessonNumber: '8',
-      notes: 'Began Clementi Sonatina in C. Practice measures 1-12 with metronome at 72 bpm.',
-      loggedAt: '2026-09-22 16:31:00'
+      notes: 'Freeway accident delayed travel by 12 mins. Added 12 minutes to end of lesson to ensure full lesson time completed.',
+      parentStatus: 'Confirmed Late (Teacher)',
+      parentNotes: 'Confirmed! Thank you for letting us know in advance and making up the time.',
+      parentConfirmedAt: '2026-09-22 17:30:00',
+      loggedAt: '2026-09-22 16:45:00'
     },
     {
       recordId: 'ATT-003',
       date: '2026-09-15',
       studentId: 'STU-202',
       teacherId: 'T104',
-      status: 'Late',
+      status: 'Late (Student)',
       lessonNumber: '6',
-      notes: 'Arrived 10 minutes late due to traffic. Focused on bowing technique and Suzuki Book 1.',
+      notes: 'Student arrived 10 minutes late due to traffic. Focused on bowing technique and Suzuki Book 1.',
+      parentStatus: 'Confirmed Late (Student)',
+      parentNotes: 'Sorry that we were running behind today! Thank you so much for your patience.',
+      parentConfirmedAt: '2026-09-15 17:45:00',
       loggedAt: '2026-09-15 17:15:00'
     },
     {
@@ -124,7 +134,10 @@ window.CMS_MOCK_DATA = {
       teacherId: 'T104',
       status: 'Rescheduled',
       lessonNumber: '7',
-      notes: 'Family notified in advance of soccer tournament. Makeup scheduled for Saturday 10:00 AM.',
+      notes: 'Family notified in advance of school choir recital. Makeup scheduled for Saturday 10:00 AM.',
+      parentStatus: 'Confirmed Rescheduled',
+      parentNotes: 'Thank you for being so flexible! See you Saturday morning.',
+      parentConfirmedAt: '2026-09-21 19:00:00',
       loggedAt: '2026-09-21 18:00:00'
     },
     {
@@ -135,6 +148,9 @@ window.CMS_MOCK_DATA = {
       status: 'Attended',
       lessonNumber: '5',
       notes: 'Fabulous progress on sight-reading and chord inversions.',
+      parentStatus: '',
+      parentNotes: '',
+      parentConfirmedAt: '',
       loggedAt: '2026-09-22 16:00:00'
     },
     {
@@ -145,7 +161,46 @@ window.CMS_MOCK_DATA = {
       status: 'Missed',
       lessonNumber: '9',
       notes: 'No-show without prior notice. Studio policy notified for makeup eligibility.',
+      parentStatus: '',
+      parentNotes: '',
+      parentConfirmedAt: '',
       loggedAt: '2026-09-22 17:35:00'
+    }
+  ],
+  travelAlerts: [
+    {
+      alertId: 'ALERT-001',
+      date: new Date().toISOString().substring(0, 10), // Set to today so it displays live in test
+      teacherId: 'T102',
+      teacherName: 'Sarah Jenkins',
+      studentId: 'STU-201',
+      studentName: 'Leo Miller',
+      scheduledTime: '4:00 PM',
+      delayMins: '15 mins',
+      reason: 'Heavy Traffic / Highway Accident',
+      message: 'Highway 101 backup due to multi-car accident. Moving slowly now. ETA is 4:15 PM. Will make sure we make up the full 15 minutes at the end of our lesson!',
+      sentAt: '3:35 PM',
+      policyStatus: 'Policy Met (25 min notice)',
+      parentAcknowledged: 'Yes',
+      parentAckMessage: 'Thanks for the heads-up Sarah, no problem at all! Drive safe.',
+      parentAckAt: '3:38 PM'
+    },
+    {
+      alertId: 'ALERT-002',
+      date: new Date().toISOString().substring(0, 10),
+      teacherId: 'T104',
+      teacherName: 'Elena Rostova',
+      studentId: 'STU-202',
+      studentName: 'Maya Miller',
+      scheduledTime: '4:45 PM',
+      delayMins: '20 mins',
+      reason: 'Severe Weather / Sudden Rainstorm',
+      message: 'Heavy rainstorm and flooded intersection on Oak Avenue. Slow traffic. ETA 5:05 PM. Will make up the time!',
+      sentAt: '4:38 PM',
+      policyStatus: 'LATE NOTICE (7 min notice - Policy Alert)',
+      parentAcknowledged: 'Pending',
+      parentAckMessage: '',
+      parentAckAt: ''
     }
   ]
 };

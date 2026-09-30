@@ -1,5 +1,6 @@
 /**
- * Cruz Music Studio - Student Attendance Tracker Frontend Engine
+ * Cruz Music Studio - Student Attendance & Travel Teacher Tracker
+ * Frontend Client Engine
  */
 
 (function () {
@@ -59,6 +60,7 @@
     familyWelcomeName: document.getElementById('family-welcome-name'),
     familyContactSub: document.getElementById('family-contact-sub'),
     familyPinDisplay: document.getElementById('family-pin-display'),
+    familyTravelAlertsContainer: document.getElementById('family-travel-alerts-container'),
     familyStudentTabs: document.getElementById('family-student-tabs'),
     activeStudentName: document.getElementById('active-student-name'),
     activeStudentInstrument: document.getElementById('active-student-instrument'),
@@ -82,6 +84,7 @@
     adminStudentsTbody: document.getElementById('admin-students-tbody'),
     adminTeachersTbody: document.getElementById('admin-teachers-tbody'),
     adminAttendanceTbody: document.getElementById('admin-attendance-tbody'),
+    adminAlertsTbody: document.getElementById('admin-alerts-tbody'),
     gasEndpointUrl: document.getElementById('gas-endpoint-url'),
     btnSaveGasUrl: document.getElementById('btn-save-gas-url'),
     btnResetDemoMode: document.getElementById('btn-reset-demo-mode'),
@@ -100,6 +103,34 @@
     newTeacherPinInput: document.getElementById('new-teacher-pin'),
     btnGenTeacherPin: document.getElementById('btn-gen-teacher-pin'),
 
+    // Travel Delay Modal (Teacher)
+    modalTravelAlert: document.getElementById('modal-travel-alert'),
+    formTravelAlert: document.getElementById('form-travel-alert'),
+    alertStudentId: document.getElementById('alert-student-id'),
+    alertScheduledTime: document.getElementById('alert-scheduled-time'),
+    alertModalStudentName: document.getElementById('alert-modal-student-name'),
+    alertModalSchedule: document.getElementById('alert-modal-schedule'),
+    policyComplianceBox: document.getElementById('policy-compliance-box'),
+    alertDelayInput: document.getElementById('alert-delay-input'),
+    alertReasonSelect: document.getElementById('alert-reason-select'),
+    alertMessageInput: document.getElementById('alert-message-input'),
+
+    // Parent Confirm Modal
+    modalParentConfirm: document.getElementById('modal-parent-confirm'),
+    formParentConfirm: document.getElementById('form-parent-confirm'),
+    confirmRecordId: document.getElementById('confirm-record-id'),
+    confirmStudentId: document.getElementById('confirm-student-id'),
+    confirmModalLessonTitle: document.getElementById('confirm-modal-lesson-title'),
+    confirmModalTeacherName: document.getElementById('confirm-modal-teacher-name'),
+    confirmStatusSelect: document.getElementById('confirm-status-select'),
+    confirmParentNotes: document.getElementById('confirm-parent-notes'),
+
+    // Parent Ack Travel Alert Modal
+    modalAckAlert: document.getElementById('modal-ack-alert'),
+    formAckAlert: document.getElementById('form-ack-alert'),
+    ackAlertId: document.getElementById('ack-alert-id'),
+    ackMessageInput: document.getElementById('ack-message-input'),
+
     // Toast
     toast: document.getElementById('toast-notification'),
     toastMsg: document.getElementById('toast-message')
@@ -113,6 +144,7 @@
     bindHeaderEvents();
     bindAdminTabs();
     bindModalEvents();
+    bindTravelAlertEvents();
 
     if (state.gasUrl && dom.gasEndpointUrl) {
       dom.gasEndpointUrl.value = state.gasUrl;
@@ -152,9 +184,7 @@
       });
     });
 
-    // Physical Keyboard Listener
     window.addEventListener('keydown', (e) => {
-      // Only capture if login view is active and no modal/input is focused
       if (dom.viewLogin.style.display !== 'none' && !isFormInputFocused()) {
         if (/^[0-9]$/.test(e.key)) {
           handlePinInput(e.key);
@@ -210,12 +240,10 @@
       let result = null;
 
       if (state.gasUrl) {
-        // Live Google Apps Script API Call
         const url = `${state.gasUrl}?action=verifyPin&pin=${encodeURIComponent(pin)}`;
         const res = await fetch(url);
         result = await res.json();
       } else {
-        // Local Demo Verification
         result = localVerifyPin(pin);
       }
 
@@ -326,6 +354,9 @@
     dom.familyContactSub.textContent = `Primary Contact: ${family.parentPhone || ''} • ${family.parentEmail || ''}`;
     dom.familyPinDisplay.textContent = family.pin;
 
+    // Render Live Travel Alerts if any exist today for family's students
+    renderFamilyTravelAlerts(students);
+
     // Render Student Tabs for Siblings
     dom.familyStudentTabs.innerHTML = '';
     if (students.length > 1) {
@@ -351,6 +382,75 @@
     }
   }
 
+  function renderFamilyTravelAlerts(students) {
+    const db = getLocalDb();
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const studentIds = students.map(s => s.studentId);
+
+    // Find alerts for today matching these student IDs
+    const relevantAlerts = (db.travelAlerts || []).filter(a => {
+      return a.date === todayStr && studentIds.includes(a.studentId);
+    });
+
+    dom.familyTravelAlertsContainer.innerHTML = '';
+
+    if (relevantAlerts.length === 0) {
+      dom.familyTravelAlertsContainer.style.display = 'none';
+      return;
+    }
+
+    dom.familyTravelAlertsContainer.style.display = 'flex';
+
+    relevantAlerts.forEach(alert => {
+      const banner = document.createElement('div');
+      const isAck = alert.parentAcknowledged === 'Yes';
+      banner.className = `travel-alert-banner ${isAck ? 'acknowledged' : ''}`;
+
+      const targetStudent = students.find(s => s.studentId === alert.studentId);
+      const studentName = targetStudent ? targetStudent.studentName : 'Student';
+      const isPolicyMet = (alert.policyStatus || '').toLowerCase().includes('policy met');
+
+      banner.innerHTML = `
+        <div class="alert-header-row">
+          <div class="alert-title-wrap">
+            <div class="alert-icon-car">🚗</div>
+            <div>
+              <h4>Travel Delay Alert: ${alert.teacherName || 'Instructor'} is running ~${alert.delayMins || '15 mins'} late</h4>
+              <p>For ${studentName}'s Lesson (Scheduled: ${alert.scheduledTime || 'Today'}) • Reason: ${alert.reason || 'Traffic'}</p>
+            </div>
+          </div>
+          <div>
+            <span class="policy-badge ${isPolicyMet ? 'met' : 'late'}">
+              ${isPolicyMet ? '✓ 15+ Min Policy Notice' : '⚠️ Late Notice (<15 min)'}
+            </span>
+          </div>
+        </div>
+
+        <div class="alert-message-box">
+          <strong>Teacher Note:</strong> "${alert.message || 'Running behind due to traffic. Will make up time!'}"
+        </div>
+
+        <div class="alert-action-row">
+          <div style="font-size: 0.8rem; color: #78350F;">
+            Sent at ${alert.sentAt || 'Today'}
+          </div>
+          <div>
+            ${isAck ? `
+              <div class="parent-ack-text">
+                ✓ Acknowledged: "${alert.parentAckMessage || 'Received'}" (${alert.parentAckAt || ''})
+              </div>
+            ` : `
+              <button type="button" class="btn-primary" style="background:#B45309; padding:6px 14px; font-size:0.82rem;" onclick="app.openAckAlertModal('${alert.alertId}')">
+                💬 Reply / Acknowledge Notice
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+      dom.familyTravelAlertsContainer.appendChild(banner);
+    });
+  }
+
   function updateActiveFamilyStudent(student) {
     const db = getLocalDb();
     const teacher = (db.teachers || []).find(t => t.id === student.teacherId);
@@ -371,7 +471,7 @@
     studentRecords.forEach(r => {
       const s = (r.status || '').toLowerCase();
       if (s === 'attended') attended++;
-      else if (s === 'late') late++;
+      else if (s.includes('late')) late++;
       else if (s === 'missed') missed++;
       else if (s === 'rescheduled') rescheduled++;
     });
@@ -386,7 +486,7 @@
     if (studentRecords.length === 0) {
       dom.familyAttendanceTbody.innerHTML = `
         <tr>
-          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
             No attendance records logged yet for this term.
           </td>
         </tr>
@@ -398,35 +498,87 @@
       const tr = document.createElement('tr');
       const recTeacher = (db.teachers || []).find(t => t.id === rec.teacherId);
       const instructorName = recTeacher ? recTeacher.name : teacherName;
+      const isConfirmed = rec.parentStatus && rec.parentStatus.trim() !== '';
+
+      const statusCleanClass = getStatusCleanClass(rec.status);
 
       tr.innerHTML = `
         <td style="font-weight: 700;">#${rec.lessonNumber || '-'}</td>
         <td style="color: var(--text-muted); font-size: 0.85rem;">${rec.date}</td>
-        <td><span class="status-badge ${rec.status}">${getStatusIcon(rec.status)} ${rec.status}</span></td>
+        <td>
+          <span class="status-badge ${statusCleanClass}">
+            ${getStatusIcon(rec.status)} ${formatStatusLabel(rec.status)}
+          </span>
+        </td>
         <td style="font-size: 0.88rem;">${instructorName}</td>
-        <td style="font-size: 0.88rem; line-height: 1.4;">${rec.notes || '<em style="color:#94a3b8;">No specific notes logged</em>'}</td>
+        <td>
+          <div class="notes-stack">
+            <div class="teacher-note-bubble">
+              <strong>🎵 Instructor Note:</strong> ${rec.notes || '<em style="color:#94a3b8;">Lesson held, no extra note logged</em>'}
+            </div>
+            ${rec.parentNotes ? `
+              <div class="parent-note-bubble">
+                <strong>💬 Family Note:</strong> "${rec.parentNotes}"
+              </div>
+            ` : ''}
+          </div>
+        </td>
+        <td>
+          ${isConfirmed ? `
+            <div class="confirmed-chip">
+              <span>✓</span>
+              <span>${rec.parentStatus}</span>
+            </div>
+            <div style="margin-top: 4px;">
+              <button class="demo-chip" style="font-size:0.7rem; padding:2px 6px;" onclick="app.openParentConfirmModal('${rec.recordId}', '${student.studentId}')">
+                ✏️ Edit Note
+              </button>
+            </div>
+          ` : `
+            <button class="btn-confirm-action" onclick="app.openParentConfirmModal('${rec.recordId}', '${student.studentId}')">
+              ✓ Confirm / Add Note
+            </button>
+          `}
+        </td>
       `;
       dom.familyAttendanceTbody.appendChild(tr);
     });
   }
 
+  function getStatusCleanClass(status) {
+    const s = (status || '').toLowerCase();
+    if (s.includes('late') && s.includes('teacher')) return 'LateTeacher';
+    if (s.includes('late')) return 'LateStudent';
+    if (s.includes('attend')) return 'Attended';
+    if (s.includes('miss')) return 'Missed';
+    if (s.includes('resched')) return 'Rescheduled';
+    return 'Attended';
+  }
+
+  function formatStatusLabel(status) {
+    if (!status) return 'Attended';
+    if (status === 'Late (Teacher)') return 'Late (Teacher)';
+    if (status === 'Late (Student)') return 'Late (Student)';
+    return status;
+  }
+
   function getStatusIcon(status) {
-    switch ((status || '').toLowerCase()) {
-      case 'attended': return '🟢';
-      case 'late': return '🟡';
-      case 'missed': return '🔴';
-      case 'rescheduled': return '🔵';
-      default: return '⚪';
-    }
+    const s = (status || '').toLowerCase();
+    if (s.includes('teacher')) return '🟠';
+    if (s.includes('late')) return '🟡';
+    if (s.includes('attend')) return '🟢';
+    if (s.includes('miss')) return '🔴';
+    if (s.includes('resched')) return '🔵';
+    return '⚪';
   }
 
   // ============================================================
-  // VIEW: TEACHER PORTAL
+  // VIEW: TEACHER PORTAL & STUDENT CARDS
   // ============================================================
   function renderTeacherPortal(teacher) {
     dom.viewTeacher.style.display = 'block';
     dom.teacherPortalName.textContent = `Instructor: ${teacher.name}`;
-    dom.teacherPortalInstruments.textContent = `${teacher.instruments || 'Music Lessons'} • Student Attendance Roster`;
+    dom.teacherPortalInstruments.textContent = `${teacher.instruments || 'Music Lessons'} • Today's Travel Student Roster`;
     loadTeacherRoster();
   }
 
@@ -452,15 +604,20 @@
 
     dom.rosterCountLabel.textContent = `Assigned Students (${assignedStudents.length})`;
 
-    // Map existing attendance for this date
+    // Map existing attendance and travel alerts for targetDate
     state.teacherRosterData = assignedStudents.map(student => {
-      const existing = (db.attendance || []).find(a => a.studentId === student.studentId && a.date === targetDate);
+      const existingAtt = (db.attendance || []).find(a => a.studentId === student.studentId && a.date === targetDate);
+      const existingAlert = (db.travelAlerts || []).find(a => a.studentId === student.studentId && a.date === targetDate && a.teacherId === teacherId);
+
       return {
         ...student,
-        currentStatus: existing ? existing.status : 'Unmarked',
-        lessonNumber: existing ? existing.lessonNumber : '',
-        notes: existing ? existing.notes : '',
-        recordId: existing ? existing.recordId : null,
+        currentStatus: existingAtt ? existingAtt.status : 'Unmarked',
+        lessonNumber: existingAtt ? existingAtt.lessonNumber : '',
+        notes: existingAtt ? existingAtt.notes : '',
+        parentStatus: existingAtt ? existingAtt.parentStatus : '',
+        parentNotes: existingAtt ? existingAtt.parentNotes : '',
+        recordId: existingAtt ? existingAtt.recordId : null,
+        activeAlert: existingAlert || null,
         isDirty: false
       };
     });
@@ -485,6 +642,8 @@
       card.className = `student-card ${item.currentStatus !== 'Unmarked' ? 'saved' : ''}`;
       card.id = `student-card-${item.studentId}`;
 
+      const hasAlert = item.activeAlert !== null;
+
       card.innerHTML = `
         <div class="student-card-header">
           <div class="student-name-block">
@@ -495,17 +654,44 @@
               <span>• Parent: ${item.parentName} (${item.parentPhone || ''})</span>
             </div>
           </div>
+          <div>
+            <button type="button" class="btn-travel-delay" onclick="app.openTravelAlertModal('${item.studentId}')">
+              🚗 ${hasAlert ? 'Update Travel Delay' : 'Travel Delay Alert'}
+            </button>
+          </div>
         </div>
 
-        <!-- 4 Quick Attendance Action Buttons -->
+        ${hasAlert ? `
+          <div class="card-alert-badge">
+            <div>
+              <strong>🚗 Travel Notice Active:</strong> +${item.activeAlert.delayMins} (${item.activeAlert.reason})
+              • <span style="font-size:0.75rem;">${item.activeAlert.policyStatus}</span>
+            </div>
+            <div>
+              ${item.activeAlert.parentAcknowledged === 'Yes' ? `
+                <span style="color:#065F46; font-weight:700; font-size:0.75rem;">
+                  ✓ Parent Replied: "${item.activeAlert.parentAckMessage || 'Acknowledged'}"
+                </span>
+              ` : `
+                <span style="color:#92400E; font-size:0.75rem;">Waiting for parent reply...</span>
+              `}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- 5 Attendance Status Buttons (Including Student and Teacher Tardiness) -->
         <div class="status-buttons">
           <button type="button" class="btn-status attended ${item.currentStatus === 'Attended' ? 'active' : ''}" data-idx="${index}" data-status="Attended">
             <span class="status-icon">🟢</span>
             <span>Attended</span>
           </button>
-          <button type="button" class="btn-status late ${item.currentStatus === 'Late' ? 'active' : ''}" data-idx="${index}" data-status="Late">
+          <button type="button" class="btn-status late-student ${item.currentStatus === 'Late (Student)' ? 'active' : ''}" data-idx="${index}" data-status="Late (Student)">
             <span class="status-icon">🟡</span>
-            <span>Late</span>
+            <span>Student Tardy</span>
+          </button>
+          <button type="button" class="btn-status late-teacher ${item.currentStatus === 'Late (Teacher)' ? 'active' : ''}" data-idx="${index}" data-status="Late (Teacher)">
+            <span class="status-icon">🟠</span>
+            <span>Teacher Tardy</span>
           </button>
           <button type="button" class="btn-status missed ${item.currentStatus === 'Missed' ? 'active' : ''}" data-idx="${index}" data-status="Missed">
             <span class="status-icon">🔴</span>
@@ -523,15 +709,25 @@
             <input type="text" class="input-sm lesson-no-input" placeholder="Lesson #" value="${item.lessonNumber || ''}" data-idx="${index}">
           </div>
           <div>
-            <input type="text" class="input-sm notes-input" placeholder="Practice homework & lesson notes (visible to parent)..." value="${item.notes || ''}" data-idx="${index}">
+            <input type="text" class="input-sm notes-input" placeholder="Teacher notes, practice homework, or make-up time details..." value="${item.notes || ''}" data-idx="${index}">
           </div>
           <div>
             <button type="button" class="btn-save-row" data-idx="${index}">Save</button>
           </div>
         </div>
+
+        ${item.parentNotes ? `
+          <div class="card-parent-feedback">
+            <span>💬</span>
+            <div>
+              <strong>Parent Note from ${item.parentName}:</strong> "${item.parentNotes}"
+              <span style="font-size:0.75rem; color:#15803d; margin-left:6px;">(${item.parentStatus || 'Confirmed'})</span>
+            </div>
+          </div>
+        ` : ''}
       `;
 
-      // Event Listeners for buttons inside this card
+      // Status button events
       card.querySelectorAll('.btn-status').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.idx, 10);
@@ -569,20 +765,23 @@
     item.currentStatus = newStatus;
     item.isDirty = true;
 
-    // If lesson number is empty and marked Attended, auto-fill reasonable estimate
     if (!item.lessonNumber && newStatus === 'Attended') {
       item.lessonNumber = '1';
     }
 
+    // Auto-suggest makeup note if teacher is tardy
+    if (newStatus === 'Late (Teacher)' && (!item.notes || item.notes.trim() === '')) {
+      item.notes = 'Travel delay. Will add makeup time to ensure full lesson is completed.';
+    }
+
     renderTeacherStudentCards();
-    // Auto-save on single tap
     saveSingleAttendanceRecord(index);
   }
 
   async function saveSingleAttendanceRecord(index) {
     const item = state.teacherRosterData[index];
     if (item.currentStatus === 'Unmarked') {
-      showToast('Please select an attendance status (Attended, Late, Missed, or Rescheduled).');
+      showToast('Please select an attendance status.');
       return;
     }
 
@@ -597,14 +796,12 @@
 
     try {
       if (state.gasUrl) {
-        // Post to Google Apps Script
         await fetch(state.gasUrl, {
           method: 'POST',
           body: JSON.stringify({ action: 'recordAttendance', records: [rec] })
         });
       }
 
-      // Save locally to mock DB
       const db = getLocalDb();
       if (!db.attendance) db.attendance = [];
 
@@ -615,6 +812,9 @@
         db.attendance.push({
           recordId: 'ATT-' + Math.floor(100000 + Math.random() * 900000),
           ...rec,
+          parentStatus: '',
+          parentNotes: '',
+          parentConfirmedAt: '',
           loggedAt: new Date().toISOString()
         });
       }
@@ -664,6 +864,9 @@
           db.attendance.push({
             recordId: 'ATT-' + Math.floor(100000 + Math.random() * 900000),
             ...rec,
+            parentStatus: '',
+            parentNotes: '',
+            parentConfirmedAt: '',
             loggedAt: new Date().toISOString()
           });
         }
@@ -678,6 +881,262 @@
   }
 
   // ============================================================
+  // TRAVEL DELAY ALERT & 15-MINUTE POLICY SYSTEM
+  // ============================================================
+  function bindTravelAlertEvents() {
+    // Delay duration chips
+    document.querySelectorAll('#delay-duration-chips .chip-option').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#delay-duration-chips .chip-option').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        dom.alertDelayInput.value = chip.dataset.val;
+      });
+    });
+
+    // Submit Travel Alert Form
+    if (dom.formTravelAlert) {
+      dom.formTravelAlert.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitTravelAlert();
+      });
+    }
+
+    // Submit Parent Confirm Form
+    if (dom.formParentConfirm) {
+      dom.formParentConfirm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitParentConfirm();
+      });
+    }
+
+    // Submit Parent Ack Alert Form
+    if (dom.formAckAlert) {
+      dom.formAckAlert.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitAckAlert();
+      });
+    }
+  }
+
+  function openTravelAlertModal(studentId) {
+    const student = state.teacherRosterData.find(s => s.studentId === studentId);
+    if (!student) return;
+
+    dom.alertStudentId.value = student.studentId;
+    dom.alertScheduledTime.value = student.time || '';
+    dom.alertModalStudentName.textContent = `${student.studentName} (${student.instrument})`;
+    dom.alertModalSchedule.textContent = `${student.day || 'Today'} at ${student.time || 'Scheduled Time'}`;
+
+    // Live 15-minute Studio Policy Validation
+    const now = new Date();
+    const timeMatch = (student.time || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    let diffMinutes = 30; // fallback default
+
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const mins = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+
+      const schedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, mins, 0);
+      diffMinutes = Math.round((schedDate.getTime() - now.getTime()) / (60 * 1000));
+    }
+
+    if (diffMinutes >= 15) {
+      dom.policyComplianceBox.style.background = '#ECFDF5';
+      dom.policyComplianceBox.style.color = '#065F46';
+      dom.policyComplianceBox.style.border = '1px solid #A7F3D0';
+      dom.policyComplianceBox.innerHTML = `
+        <strong>🟢 Studio Policy Met:</strong> You are reporting this travel delay <strong>${diffMinutes} minutes</strong> in advance (15+ min notice required). Both the family and administration will receive this notification.
+      `;
+    } else {
+      dom.policyComplianceBox.style.background = '#FEF2F2';
+      dom.policyComplianceBox.style.color = '#991B1B';
+      dom.policyComplianceBox.style.border = '1px solid #FECACA';
+      dom.policyComplianceBox.innerHTML = `
+        <strong>⚠️ Studio Policy Alert:</strong> You are reporting this only <strong>${Math.max(0, diffMinutes)} minutes</strong> before the scheduled lesson. Studio policy strictly requires at least <strong>15 minutes advance notice</strong> for travel delays. This will be flagged for administration.
+      `;
+    }
+
+    // Default note
+    if (!dom.alertMessageInput.value) {
+      dom.alertMessageInput.value = 'Running behind due to traffic. Will make sure we make up the full time today or add it to our next lesson!';
+    }
+
+    dom.modalTravelAlert.classList.add('open');
+  }
+
+  async function submitTravelAlert() {
+    const studentId = dom.alertStudentId.value;
+    const scheduledTime = dom.alertScheduledTime.value;
+    const delayMins = dom.alertDelayInput.value;
+    const reason = dom.alertReasonSelect.value;
+    const message = dom.alertMessageInput.value.trim();
+
+    const teacher = state.currentUser.teacher;
+    const now = new Date();
+    const timeMatch = (scheduledTime || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    let policyStatus = 'Policy Met (15+ min notice)';
+
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const mins = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      const schedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, mins, 0);
+      const diffMinutes = Math.round((schedDate.getTime() - now.getTime()) / (60 * 1000));
+      if (diffMinutes < 15) {
+        policyStatus = `LATE NOTICE (${Math.max(0, diffMinutes)} min notice - Policy Alert)`;
+      } else {
+        policyStatus = `Policy Met (${diffMinutes} min notice)`;
+      }
+    }
+
+    const alertObj = {
+      alertId: 'ALERT-' + Math.floor(100000 + Math.random() * 900000),
+      date: state.teacherSelectedDate,
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+      studentId: studentId,
+      scheduledTime: scheduledTime,
+      delayMins: delayMins,
+      reason: reason,
+      message: message,
+      sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      policyStatus: policyStatus,
+      parentAcknowledged: 'Pending',
+      parentAckMessage: '',
+      parentAckAt: ''
+    };
+
+    try {
+      if (state.gasUrl) {
+        await fetch(state.gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'sendTravelAlert', data: alertObj })
+        });
+      }
+
+      const db = getLocalDb();
+      if (!db.travelAlerts) db.travelAlerts = [];
+      db.travelAlerts.push(alertObj);
+      saveLocalDb(db);
+
+      closeModals();
+      loadTeacherRoster();
+      showToast(`Travel delay alert sent! (${delayMins} delay)`);
+    } catch (err) {
+      showToast('Error sending delay alert: ' + err.message);
+    }
+  }
+
+  function openAckAlertModal(alertId) {
+    dom.ackAlertId.value = alertId;
+    dom.ackMessageInput.value = 'No problem, drive safe!';
+    dom.modalAckAlert.classList.add('open');
+  }
+
+  async function submitAckAlert() {
+    const alertId = dom.ackAlertId.value;
+    const replyMsg = dom.ackMessageInput.value.trim();
+
+    try {
+      if (state.gasUrl) {
+        await fetch(state.gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'ackTravelAlert', alertId: alertId, ackMessage: replyMsg })
+        });
+      }
+
+      const db = getLocalDb();
+      if (db.travelAlerts) {
+        const item = db.travelAlerts.find(a => a.alertId === alertId);
+        if (item) {
+          item.parentAcknowledged = 'Yes';
+          item.parentAckMessage = replyMsg;
+          item.parentAckAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+      saveLocalDb(db);
+
+      closeModals();
+      showToast('Reply sent to instructor!');
+      renderFamilyTravelAlerts(state.currentUser.students);
+    } catch (err) {
+      showToast('Error sending reply: ' + err.message);
+    }
+  }
+
+  // ============================================================
+  // TWO-WAY ATTENDANCE CONFIRMATION (PARENTS)
+  // ============================================================
+  function openParentConfirmModal(recordId, studentId) {
+    const db = getLocalDb();
+    const rec = (db.attendance || []).find(a => a.recordId === recordId);
+    if (!rec) return;
+
+    dom.confirmRecordId.value = recordId;
+    dom.confirmStudentId.value = studentId;
+
+    const teacher = (db.teachers || []).find(t => t.id === rec.teacherId);
+    dom.confirmModalLessonTitle.textContent = `Lesson #${rec.lessonNumber || '-'} on ${rec.date}`;
+    dom.confirmModalTeacherName.textContent = teacher ? teacher.name : (rec.teacherId || 'Instructor');
+
+    if (rec.parentStatus) {
+      dom.confirmStatusSelect.value = rec.parentStatus;
+    } else if (rec.status === 'Late (Teacher)') {
+      dom.confirmStatusSelect.value = 'Confirmed Late (Teacher)';
+    } else if (rec.status === 'Late (Student)') {
+      dom.confirmStatusSelect.value = 'Confirmed Late (Student)';
+    } else if (rec.status === 'Rescheduled') {
+      dom.confirmStatusSelect.value = 'Confirmed Rescheduled';
+    } else {
+      dom.confirmStatusSelect.value = 'Confirmed Attended';
+    }
+
+    dom.confirmParentNotes.value = rec.parentNotes || '';
+    dom.modalParentConfirm.classList.add('open');
+  }
+
+  async function submitParentConfirm() {
+    const recordId = dom.confirmRecordId.value;
+    const parentStatus = dom.confirmStatusSelect.value;
+    const parentNotes = dom.confirmParentNotes.value.trim();
+
+    try {
+      if (state.gasUrl) {
+        await fetch(state.gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'parentConfirmAttendance',
+            data: { recordId, parentStatus, parentNotes }
+          })
+        });
+      }
+
+      const db = getLocalDb();
+      if (db.attendance) {
+        const item = db.attendance.find(a => a.recordId === recordId);
+        if (item) {
+          item.parentStatus = parentStatus;
+          item.parentNotes = parentNotes;
+          item.parentConfirmedAt = new Date().toISOString();
+        }
+      }
+      saveLocalDb(db);
+
+      closeModals();
+      showToast('Attendance confirmed with teacher & administration!');
+      const currentStu = state.currentUser.students[state.familyActiveStudentIdx];
+      updateActiveFamilyStudent(currentStu);
+    } catch (err) {
+      showToast('Error saving confirmation: ' + err.message);
+    }
+  }
+
+  // ============================================================
   // VIEW: STUDIO ADMIN DASHBOARD
   // ============================================================
   function renderAdminPortal() {
@@ -685,6 +1144,7 @@
     renderAdminStudentsTable();
     renderAdminTeachersTable();
     renderAdminAttendanceTable();
+    renderAdminAlertsTable();
     populateTeacherDropdown();
   }
 
@@ -744,6 +1204,7 @@
           renderAdminStudentsTable();
           renderAdminTeachersTable();
           renderAdminAttendanceTable();
+          renderAdminAlertsTable();
           showToast('Demo data reset!');
         }
       });
@@ -795,7 +1256,7 @@
     const db = getLocalDb();
     dom.adminAttendanceTbody.innerHTML = '';
 
-    const records = (db.attendance || []).slice(-30).reverse();
+    const records = (db.attendance || []).slice(-35).reverse();
     if (records.length === 0) {
       dom.adminAttendanceTbody.innerHTML = `
         <tr><td colspan="6" style="text-align:center; padding: 20px; color: var(--text-muted);">No attendance logged yet.</td></tr>
@@ -818,11 +1279,72 @@
         <td style="font-size: 0.85rem; color: var(--text-muted);">${rec.date}</td>
         <td style="font-weight: 700;">${studentName}</td>
         <td>${teacherName}</td>
-        <td><span class="status-badge ${rec.status}">${getStatusIcon(rec.status)} ${rec.status}</span></td>
+        <td><span class="status-badge ${getStatusCleanClass(rec.status)}">${getStatusIcon(rec.status)} ${formatStatusLabel(rec.status)}</span></td>
         <td style="font-weight: 600;">#${rec.lessonNumber || '-'}</td>
-        <td style="font-size: 0.85rem; color: var(--text-muted);">${rec.notes || '-'}</td>
+        <td>
+          <div style="font-size: 0.85rem;">
+            <div><strong>Teacher:</strong> ${rec.notes || '-'}</div>
+            ${rec.parentNotes ? `
+              <div style="color: #854d0e; margin-top: 3px;">
+                <strong>Parent (${rec.parentStatus || 'Confirmed'}):</strong> "${rec.parentNotes}"
+              </div>
+            ` : '<div style="color:#94a3b8; font-size:0.75rem;">(Pending parent confirmation)</div>'}
+          </div>
+        </td>
       `;
       dom.adminAttendanceTbody.appendChild(tr);
+    });
+  }
+
+  function renderAdminAlertsTable() {
+    const db = getLocalDb();
+    dom.adminAlertsTbody.innerHTML = '';
+
+    const alerts = (db.travelAlerts || []).slice().reverse();
+    if (alerts.length === 0) {
+      dom.adminAlertsTbody.innerHTML = `
+        <tr><td colspan="8" style="text-align:center; padding: 20px; color: var(--text-muted);">No travel delay alerts recorded.</td></tr>
+      `;
+      return;
+    }
+
+    alerts.forEach(a => {
+      let studentName = a.studentId;
+      (db.families || []).forEach(f => {
+        const found = (f.students || []).find(s => s.studentId === a.studentId);
+        if (found) studentName = found.studentName;
+      });
+
+      const teacher = (db.teachers || []).find(t => t.id === a.teacherId);
+      const teacherName = teacher ? teacher.name : (a.teacherName || a.teacherId);
+      const isPolicyMet = (a.policyStatus || '').toLowerCase().includes('policy met');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-size:0.85rem;">${a.date} <br><small style="color:var(--text-muted);">${a.sentAt || ''}</small></td>
+        <td style="font-weight: 700;">${teacherName}</td>
+        <td>${studentName}</td>
+        <td>${a.scheduledTime || '-'}</td>
+        <td><strong style="color:#b45309;">+${a.delayMins || '-'}</strong></td>
+        <td style="font-size: 0.85rem; max-width: 250px;">
+          <div><strong>${a.reason}</strong></div>
+          <div style="color:var(--text-muted); margin-top:2px;">"${a.message}"</div>
+        </td>
+        <td>
+          <span class="policy-badge ${isPolicyMet ? 'met' : 'late'}">
+            ${isPolicyMet ? '✓ Policy Met' : '⚠️ LATE NOTICE (<15m)'}
+          </span>
+        </td>
+        <td>
+          ${a.parentAcknowledged === 'Yes' ? `
+            <span style="color:#065F46; font-weight:700; font-size:0.82rem;">✓ Replied:</span>
+            <div style="font-size:0.8rem; color:#15803d;">"${a.parentAckMessage || 'Received'}"</div>
+          ` : `
+            <span style="color:#94a3b8; font-size:0.8rem;">Pending reply</span>
+          `}
+        </td>
+      `;
+      dom.adminAlertsTbody.appendChild(tr);
     });
   }
 
@@ -857,7 +1379,6 @@
       });
     }
 
-    // Submit Add Student Form
     if (dom.formAddStudent) {
       dom.formAddStudent.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -865,7 +1386,6 @@
       });
     }
 
-    // Submit Add Teacher Form
     if (dom.formAddTeacher) {
       dom.formAddTeacher.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -917,7 +1437,6 @@
     const db = getLocalDb();
     if (!db.families) db.families = [];
 
-    // Check if this family PIN already exists (adding a sibling!)
     let family = db.families.find(f => String(f.pin).trim() === pin);
     if (!family) {
       family = {
@@ -981,23 +1500,46 @@
   function closeModals() {
     if (dom.modalAddStudent) dom.modalAddStudent.classList.remove('open');
     if (dom.modalAddTeacher) dom.modalAddTeacher.classList.remove('open');
+    if (dom.modalTravelAlert) dom.modalTravelAlert.classList.remove('open');
+    if (dom.modalParentConfirm) dom.modalParentConfirm.classList.remove('open');
+    if (dom.modalAckAlert) dom.modalAckAlert.classList.remove('open');
   }
 
-  // Helper for quick click demo chips on login screen
+  // Quick preset text helpers
+  function insertAlertPreset(text) {
+    if (!dom.alertMessageInput) return;
+    dom.alertMessageInput.value = dom.alertMessageInput.value ? `${dom.alertMessageInput.value} ${text}` : text;
+  }
+
+  function insertParentPreset(text) {
+    if (!dom.confirmParentNotes) return;
+    dom.confirmParentNotes.value = dom.confirmParentNotes.value ? `${dom.confirmParentNotes.value} ${text}` : text;
+  }
+
+  function insertAckPreset(text) {
+    if (!dom.ackMessageInput) return;
+    dom.ackMessageInput.value = text;
+  }
+
   function quickFillPin(code) {
     state.pinBuffer = code;
     updatePinDisplay();
     triggerPinVerification(code);
   }
 
-  // Expose global interface for inline onclicks
+  // Global API
   window.app = {
     init,
     quickFillPin,
-    closeModals
+    closeModals,
+    openTravelAlertModal,
+    openParentConfirmModal,
+    openAckAlertModal,
+    insertAlertPreset,
+    insertParentPreset,
+    insertAckPreset
   };
 
-  // Run on load
   document.addEventListener('DOMContentLoaded', init);
 
 })();

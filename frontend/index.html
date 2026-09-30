@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cruz Music Studio — Attendance & Lesson Tracker</title>
+  <title>Cruz Music Studio — Attendance & Travel Teacher Tracker</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
       <div class="brand-icon">♫</div>
       <div>
         <div class="brand-title">Cruz Music Studio</div>
-        <div class="brand-subtitle">Student Attendance Tracker</div>
+        <div class="brand-subtitle">Student Attendance & Travel Tracker</div>
       </div>
     </div>
     <div class="header-actions" id="header-user-block" style="display: none;">
@@ -32,7 +32,7 @@
     <section id="view-login" class="login-card">
       <div class="login-icon-badge">🎹</div>
       <h2 class="login-title">Studio Portal Login</h2>
-      <p class="login-desc">Enter your 4-digit studio PIN to access your lesson attendance or teacher roster.</p>
+      <p class="login-desc">Enter your 4-digit studio PIN to access your lesson attendance, travel ETA alerts, or teacher roster.</p>
 
       <!-- 4 PIN Dots -->
       <div class="pin-display-wrapper">
@@ -64,7 +64,7 @@
       <div class="demo-pills">
         <span>Instant Preview (Click to test):</span>
         <div class="demo-btn-group">
-          <button class="demo-chip" onclick="app.quickFillPin('4421')">👨‍👩‍👧 Family PIN (2 Siblings)</button>
+          <button class="demo-chip" onclick="app.quickFillPin('4421')">👨‍👩‍👧 Family PIN (Miller Siblings)</button>
           <button class="demo-chip" onclick="app.quickFillPin('1102')">🎵 Instructor PIN (Sarah Jenkins)</button>
           <button class="demo-chip" onclick="app.quickFillPin('9900')">⚙️ Studio Admin PIN</button>
         </div>
@@ -83,6 +83,11 @@
         <div class="user-badge" style="background:#1E293B; border-color:#334155;">
           <span>Family PIN:</span> <strong id="family-pin-display">4421</strong>
         </div>
+      </div>
+
+      <!-- Live Travel ETA Alerts from Travel Teachers -->
+      <div id="family-travel-alerts-container" class="travel-alert-container">
+        <!-- Rendered dynamically if teacher sent a travel delay alert -->
       </div>
 
       <!-- Child Tabs (If Family has multiple children) -->
@@ -110,7 +115,7 @@
         </div>
         <div class="stat-card" style="border-top: 4px solid var(--status-late);">
           <div class="stat-num" id="stat-late" style="color: var(--status-late);">0</div>
-          <div class="stat-label">Late</div>
+          <div class="stat-label">Tardy</div>
         </div>
         <div class="stat-card" style="border-top: 4px solid var(--status-missed);">
           <div class="stat-num" id="stat-missed" style="color: var(--status-missed);">0</div>
@@ -122,10 +127,13 @@
         </div>
       </div>
 
-      <!-- Attendance History -->
+      <!-- Attendance History with Two-Way Notes & Confirmation -->
       <div class="timeline-card">
         <div class="table-header">
-          <span>Lesson Attendance Log & Practice Notes</span>
+          <span>Lesson Attendance Log & Mutual Communication</span>
+          <span style="font-size: 0.82rem; font-weight: normal; color: var(--text-muted);">
+            Both parent & teacher can confirm attendance, tardiness, and leave notes.
+          </span>
         </div>
         <div style="overflow-x: auto;">
           <table class="attendance-table">
@@ -135,7 +143,8 @@
                 <th>Date</th>
                 <th>Status</th>
                 <th>Instructor</th>
-                <th>Practice Notes & Teacher Homework</th>
+                <th>Notes & Mutual Dialogue</th>
+                <th>Parent Confirmation</th>
               </tr>
             </thead>
             <tbody id="family-attendance-tbody">
@@ -153,7 +162,7 @@
       <div class="portal-header">
         <div class="portal-title-block">
           <h1 id="teacher-portal-name">Instructor: Sarah Jenkins</h1>
-          <p id="teacher-portal-instruments">Piano, Voice • Today's Student Roster</p>
+          <p id="teacher-portal-instruments">Piano, Voice • Today's Travel Student Roster</p>
         </div>
         <div class="teacher-controls">
           <div class="date-picker-wrap">
@@ -167,7 +176,7 @@
       <div class="action-bar" style="margin-bottom: 20px;">
         <span style="font-weight: 700; color: var(--primary-navy);" id="roster-count-label">Assigned Students (0)</span>
         <div style="font-size: 0.85rem; color: var(--text-muted);">
-          Tap status button to record attendance. Auto-saves on change.
+          Tap status to record attendance. Use <strong>"🚗 Travel Delay"</strong> if running behind (15+ min notice required).
         </div>
       </div>
 
@@ -184,9 +193,9 @@
       <div class="portal-header">
         <div class="portal-title-block">
           <h1>Studio Administration</h1>
-          <p>Cruz Music Studio • Master Roster & Attendance Control</p>
+          <p>Cruz Music Studio • Master Roster, Travel Alerts & Attendance Control</p>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <button class="btn-gold" id="btn-modal-add-student">+ New Family / Student</button>
           <button class="btn-primary" id="btn-modal-add-teacher">+ New Instructor</button>
         </div>
@@ -196,6 +205,7 @@
         <button class="admin-tab active" data-tab="admin-tab-students">Families & Students</button>
         <button class="admin-tab" data-tab="admin-tab-teachers">Instructors (10)</button>
         <button class="admin-tab" data-tab="admin-tab-attendance">Recent Attendance Log</button>
+        <button class="admin-tab" data-tab="admin-tab-alerts">🚗 Travel Alerts & Tardiness</button>
         <button class="admin-tab" data-tab="admin-tab-settings">Google Sheet Connection</button>
       </div>
 
@@ -253,7 +263,7 @@
       <div id="admin-tab-attendance" class="admin-tab-content" style="display: none;">
         <div class="timeline-card">
           <div class="table-header">
-            <span>Studio-Wide Lesson Attendance Records</span>
+            <span>Studio-Wide Lesson Attendance & Two-Way Confirmations</span>
           </div>
           <div style="overflow-x: auto;">
             <table class="attendance-table">
@@ -264,7 +274,7 @@
                   <th>Instructor</th>
                   <th>Status</th>
                   <th>Lesson #</th>
-                  <th>Notes</th>
+                  <th>Teacher Notes & Parent Confirmation</th>
                 </tr>
               </thead>
               <tbody id="admin-attendance-tbody"></tbody>
@@ -273,7 +283,33 @@
         </div>
       </div>
 
-      <!-- Tab D: Google Sheet Settings -->
+      <!-- Tab D: Travel Alerts & Tardiness Tracker -->
+      <div id="admin-tab-alerts" class="admin-tab-content" style="display: none;">
+        <div class="timeline-card">
+          <div class="table-header">
+            <span>Travel Teacher Delay Alerts & 15-Minute Policy Compliance</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Teacher</th>
+                  <th>Student</th>
+                  <th>Scheduled Time</th>
+                  <th>Delay</th>
+                  <th>Reason & Message</th>
+                  <th>15-Min Policy Status</th>
+                  <th>Parent Acknowledgment</th>
+                </tr>
+              </thead>
+              <tbody id="admin-alerts-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab E: Google Sheet Settings -->
       <div id="admin-tab-settings" class="admin-tab-content" style="display: none;">
         <div class="student-card" style="max-width: 650px;">
           <h3 style="margin-bottom: 12px; color: var(--primary-navy);">Google Apps Script Web App Connection</h3>
@@ -294,6 +330,150 @@
     </section>
 
   </main>
+
+  <!-- ==========================================
+       MODAL: TEACHER SEND TRAVEL DELAY NOTICE
+       ========================================== -->
+  <div class="modal-overlay" id="modal-travel-alert">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🚗 Report Travel Delay / Running Late</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <form id="form-travel-alert">
+        <input type="hidden" id="alert-student-id">
+        <input type="hidden" id="alert-scheduled-time">
+
+        <div style="background:#F8FAFC; border:1px solid var(--border-color); border-radius:10px; padding:12px 16px; margin-bottom:14px;">
+          <div style="font-size:0.9rem; font-weight:700; color:var(--primary-navy);" id="alert-modal-student-name">Student Name</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
+            Scheduled Lesson: <strong id="alert-modal-schedule" style="color:var(--primary-navy);">4:00 PM</strong>
+          </div>
+        </div>
+
+        <!-- 15-Minute Policy Status Check Box -->
+        <div id="policy-compliance-box" style="padding:10px 14px; border-radius:10px; margin-bottom:14px; font-size:0.85rem; line-height:1.4;">
+          <!-- Dynamically filled with policy check -->
+        </div>
+
+        <div class="form-group">
+          <label>Estimated Delay Duration *</label>
+          <div class="chip-grid" id="delay-duration-chips">
+            <button type="button" class="chip-option" data-val="10 mins">+10 mins</button>
+            <button type="button" class="chip-option selected" data-val="15 mins">+15 mins</button>
+            <button type="button" class="chip-option" data-val="20 mins">+20 mins</button>
+            <button type="button" class="chip-option" data-val="30 mins">+30 mins</button>
+          </div>
+          <input type="hidden" id="alert-delay-input" value="15 mins">
+        </div>
+
+        <div class="form-group">
+          <label>Reason for Delay *</label>
+          <select id="alert-reason-select">
+            <option value="Heavy Traffic / Highway Accident">Heavy Traffic / Highway Accident</option>
+            <option value="Previous In-Home Lesson Overran">Previous In-Home Lesson Overran</option>
+            <option value="Severe Weather / Storm">Severe Weather / Storm</option>
+            <option value="Vehicle / Transit Trouble">Vehicle / Transit Trouble</option>
+            <option value="Detour / Road Closure">Detour / Road Closure</option>
+            <option value="Other">Other Delay</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Message to Family & Administration *</label>
+          <textarea id="alert-message-input" rows="3" required placeholder="Explain delay and makeup plan..."></textarea>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <button type="button" class="demo-chip" onclick="app.insertAlertPreset('Will make up the full time at the end of our lesson today!')">+ Add Today Makeup Note</button>
+            <button type="button" class="demo-chip" onclick="app.insertAlertPreset('Will add extra time to our next lesson to make up for today.')">+ Add Next Lesson Makeup Note</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary-sm" style="color: var(--text-muted); border-color: var(--border-color);" onclick="app.closeModals()">Cancel</button>
+          <button type="submit" class="btn-gold">🚨 Send Delay Alert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: PARENT CONFIRMATION & NOTE
+       ========================================== -->
+  <div class="modal-overlay" id="modal-parent-confirm">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Confirm Lesson Attendance & Tardiness</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <form id="form-parent-confirm">
+        <input type="hidden" id="confirm-record-id">
+        <input type="hidden" id="confirm-student-id">
+
+        <div style="background:#F8FAFC; border:1px solid var(--border-color); border-radius:10px; padding:12px 16px; margin-bottom:14px;">
+          <div style="font-size:0.9rem; font-weight:700; color:var(--primary-navy);" id="confirm-modal-lesson-title">Lesson #7 • Sept 22, 2026</div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
+            Teacher: <strong id="confirm-modal-teacher-name">Sarah Jenkins</strong>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Attendance / Tardiness Status *</label>
+          <select id="confirm-status-select" required>
+            <option value="Confirmed Attended">🟢 Confirmed: Attended On Time</option>
+            <option value="Confirmed Late (Teacher)">🟠 Confirmed: Teacher was Running Late</option>
+            <option value="Confirmed Late (Student)">🟡 Confirmed: Student was Running Late</option>
+            <option value="Confirmed Rescheduled">🔵 Confirmed: Lesson Rescheduled</option>
+            <option value="Disputed">🔴 Disputed: Attendance Discrepancy</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Parent Note / Response to Teacher (Visible to Teacher & Admin)</label>
+          <textarea id="confirm-parent-notes" rows="3" placeholder="Leave a message or feedback for the teacher..."></textarea>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <button type="button" class="demo-chip" onclick="app.insertParentPreset('Sorry that we were running behind today! Thank you so much for your patience.')">+ Tardy Apology</button>
+            <button type="button" class="demo-chip" onclick="app.insertParentPreset('Confirmed! Thank you for letting us know about the traffic and making up the time.')">+ Make-up Acknowledgment</button>
+            <button type="button" class="demo-chip" onclick="app.insertParentPreset('Great lesson! Thank you.')">+ Great Lesson</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary-sm" style="color: var(--text-muted); border-color: var(--border-color);" onclick="app.closeModals()">Cancel</button>
+          <button type="submit" class="btn-primary">Submit Confirmation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: PARENT ACKNOWLEDGE TRAVEL ALERT
+       ========================================== -->
+  <div class="modal-overlay" id="modal-ack-alert">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>💬 Reply to Teacher's Travel Notice</h3>
+        <button class="modal-close" onclick="app.closeModals()">✕</button>
+      </div>
+      <form id="form-ack-alert">
+        <input type="hidden" id="ack-alert-id">
+        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:12px;">
+          Send a quick message back to your teacher letting them know you received the delay notice:
+        </p>
+        <div class="form-group">
+          <textarea id="ack-message-input" rows="3" required placeholder="Type your response..."></textarea>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <button type="button" class="demo-chip" onclick="app.insertAckPreset('No problem, drive safe!')">+ "Drive safe!"</button>
+            <button type="button" class="demo-chip" onclick="app.insertAckPreset('Thanks for the heads-up, see you then!')">+ "See you then!"</button>
+            <button type="button" class="demo-chip" onclick="app.insertAckPreset('Take your time, we are home.')">+ "Take your time"</button>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary-sm" style="color: var(--text-muted); border-color: var(--border-color);" onclick="app.closeModals()">Cancel</button>
+          <button type="submit" class="btn-gold">Send Reply to Teacher</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- ==========================================
        MODAL: ADD NEW FAMILY / STUDENT
